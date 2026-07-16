@@ -1,4 +1,5 @@
 import { Vector2 } from 'three';
+import { flightTuning } from './FlightTuning';
 
 const X_LIMIT = 4.72;
 const Y_MIN = 0.18;
@@ -93,8 +94,9 @@ export class InputController {
     const buttonKey = event.pointerType === 'touch' ? 'touch' : String(event.button);
     const isDoublePress =
       buttonKey === this.lastPressButton &&
-      event.timeStamp - this.lastPressTime <= 360 &&
-      Math.hypot(event.clientX - this.lastPressX, event.clientY - this.lastPressY) <= 34;
+      event.timeStamp - this.lastPressTime <= flightTuning.gesture.doublePressWindowMs &&
+      Math.hypot(event.clientX - this.lastPressX, event.clientY - this.lastPressY) <=
+        flightTuning.gesture.doublePressDistancePixels;
 
     this.lastPressTime = event.timeStamp;
     this.lastPressX = event.clientX;

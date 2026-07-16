@@ -1,3 +1,5 @@
+import { flightTuning } from './FlightTuning';
+
 export type GameMode = 'ready' | 'playing' | 'gameover';
 
 export interface GameSnapshot {
@@ -49,19 +51,21 @@ export class GameModel {
 
     this.elapsed += deltaSeconds;
     this.folding = folding;
-    if (folding) this.wingFold = Math.min(1, this.wingFold + deltaSeconds * 0.46);
+    if (folding) {
+      this.wingFold = Math.min(1, this.wingFold + deltaSeconds * flightTuning.wing.foldPerSecond);
+    }
 
-    this.speedMultiplier = 1 + Math.pow(this.wingFold, 1.18) * 0.42;
+    this.speedMultiplier = this.getWingSpeedMultiplier();
     const cruiseSpeed = Math.min(22, 9.5 + this.elapsed * 0.12 + this.score * 0.52);
     this.speed = cruiseSpeed * this.speedMultiplier;
     this.distance += this.speed * deltaSeconds;
   }
 
-  unfoldWings(amount = 0.38): boolean {
+  unfoldWings(amount = flightTuning.wing.unfoldStep): boolean {
     if (this.mode !== 'playing' || this.wingFold <= 0) return false;
 
     this.wingFold = Math.max(0, this.wingFold - amount);
-    this.speedMultiplier = 1 + Math.pow(this.wingFold, 1.18) * 0.42;
+    this.speedMultiplier = this.getWingSpeedMultiplier();
     return true;
   }
 
@@ -103,5 +107,12 @@ export class GameModel {
     } catch {
       // The game still runs normally when storage is blocked by the browser.
     }
+  }
+
+  private getWingSpeedMultiplier(): number {
+    return (
+      1 +
+      Math.pow(this.wingFold, flightTuning.wing.speedBoostCurve) * flightTuning.wing.speedBoostMaximum
+    );
   }
 }

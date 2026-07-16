@@ -10,6 +10,8 @@ An endless, low-poly browser flying game built with Three.js, TypeScript, and Vi
 - Hold either mouse button or hold on touch to progressively tuck the wings. The tucked state persists and raises forward speed without passive decay.
 - Double-click or double-tap to instantly open the wings by one step. Opening is deliberately discrete; only holding can tuck them again.
 
+The recommended balance values for wing timing, boost, lift, and gesture tolerance are centralized in `src/game/FlightTuning.ts` so play-feel adjustments do not require changes to the renderer or input flow.
+
 ## Run locally
 
 ```bash

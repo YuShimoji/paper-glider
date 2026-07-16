@@ -24,6 +24,7 @@ import {
 import { InputController } from './InputController';
 import { GameModel } from './GameModel';
 import { FlightDynamics } from './FlightDynamics';
+import { flightTuning } from './FlightTuning';
 import {
   CorridorWorld,
   clampDelta,
@@ -319,7 +320,7 @@ export class PaperGliderGame {
   }
 
   private updateWingVisual(snapshot: GameSnapshot): void {
-    const foldAngle = snapshot.wingFold * 1.18;
+    const foldAngle = snapshot.wingFold * flightTuning.wing.visualFoldRadians;
     this.leftWing.rotation.z = -foldAngle;
     this.rightWing.rotation.z = foldAngle;
   }
