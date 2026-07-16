@@ -12,6 +12,8 @@ An endless, low-poly browser flying game built with Three.js, TypeScript, and Vi
 
 The recommended balance values for wing timing, boost, lift, and gesture tolerance are centralized in `src/game/FlightTuning.ts` so play-feel adjustments do not require changes to the renderer or input flow.
 
+For a compact resume point with implementation context, verification notes, and next-step candidates, see `PROJECT_HANDOFF.md`.
+
 ## Run locally
 
 ```bash
