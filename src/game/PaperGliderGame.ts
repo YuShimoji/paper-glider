@@ -23,6 +23,7 @@ import {
 } from 'three';
 import { InputController } from './InputController';
 import { GameModel } from './GameModel';
+import { FlightDynamics } from './FlightDynamics';
 import {
   CorridorWorld,
   clampDelta,
@@ -34,8 +35,14 @@ import {
 import type { GameSnapshot } from './GameModel';
 
 interface DebugSnapshot extends GameSnapshot {
-  player: { x: number; y: number };
+  player: { x: number; y: number; velocityX: number; velocityY: number; lift: number };
   nextRing: { x: number; y: number; z: number } | null;
+}
+
+interface GliderRig {
+  root: Group;
+  leftWing: Group;
+  rightWing: Group;
 }
 
 declare global {
@@ -56,9 +63,12 @@ export class PaperGliderGame {
   private readonly camera = new PerspectiveCamera(58, 1, 0.1, 180);
   private readonly clock = new Clock();
   private readonly model = new GameModel();
+  private readonly dynamics = new FlightDynamics();
   private readonly input: InputController;
   private readonly world: CorridorWorld;
   private readonly glider: Group;
+  private readonly leftWing: Group;
+  private readonly rightWing: Group;
   private readonly dust: Points;
   private readonly dustPositions: Float32Array;
   private readonly scratch = new Vector3();
@@ -69,6 +79,8 @@ export class PaperGliderGame {
   private bestAtLaunch = 0;
   private hintTimer: number | undefined;
   private scoreTimer: number | undefined;
+  private wingTimer: number | undefined;
+  private baseCameraFov = 58;
 
   private readonly startOverlay: HTMLElement;
   private readonly gameoverOverlay: HTMLElement;
@@ -82,6 +94,11 @@ export class PaperGliderGame {
   private readonly controlsHint: HTMLElement;
   private readonly scoreChip: HTMLElement;
   private readonly gameoverCopy: HTMLElement;
+  private readonly flightReadout: HTMLElement;
+  private readonly wingStatus: HTMLElement;
+  private readonly speedMultiplier: HTMLElement;
+  private readonly wingFill: HTMLElement;
+  private readonly liftFill: HTMLElement;
 
   constructor(root: HTMLDivElement) {
     this.root = root;
@@ -111,6 +128,11 @@ export class PaperGliderGame {
     this.controlsHint = this.query('.controls-hint');
     this.scoreChip = this.query('.score-chip.primary');
     this.gameoverCopy = this.query('.gameover-copy');
+    this.flightReadout = this.query('.flight-readout');
+    this.wingStatus = this.query('.wing-status');
+    this.speedMultiplier = this.query('.speed-multiplier');
+    this.wingFill = this.query('.wing-fill');
+    this.liftFill = this.query('.lift-fill');
 
     this.scene.background = new Color(0xb8c8b7);
     this.scene.fog = new Fog(0xb8c8b7, 24, 132);
@@ -119,7 +141,10 @@ export class PaperGliderGame {
 
     this.addLights();
     const paperTexture = createPaperTexture();
-    this.glider = this.createGlider(paperTexture);
+    const gliderRig = this.createGlider(paperTexture);
+    this.glider = gliderRig.root;
+    this.leftWing = gliderRig.leftWing;
+    this.rightWing = gliderRig.rightWing;
     this.scene.add(this.glider);
     this.world = new CorridorWorld(this.scene, paperTexture);
     this.world.reset();
@@ -149,6 +174,7 @@ export class PaperGliderGame {
     this.bestAtLaunch = this.model.getSnapshot().best;
     this.world.reset();
     this.input.reset();
+    this.dynamics.reset();
     this.input.setEnabled(true);
     this.glider.position.set(0, 2.35, 0.62);
     this.glider.rotation.set(0, 0, 0);
@@ -159,15 +185,17 @@ export class PaperGliderGame {
     this.gameoverOverlay.classList.remove('is-visible');
     this.root.classList.add('is-playing');
     this.controlsHint.classList.add('is-visible');
-    this.hintTimer = window.setTimeout(() => this.controlsHint.classList.remove('is-visible'), 3600);
+    this.hintTimer = window.setTimeout(() => this.controlsHint.classList.remove('is-visible'), 5200);
   };
 
   private readonly animate = (): void => {
     const deltaSeconds = clampDelta(this.clock.getDelta());
     this.elapsed += deltaSeconds;
     this.input.update(deltaSeconds);
-    this.model.update(deltaSeconds);
+    if (this.input.consumeUnfoldRequest() && this.model.unfoldWings()) this.popWingsOpen();
+    this.model.update(deltaSeconds, this.input.isFolding());
     const snapshot = this.model.getSnapshot();
+    this.updateWingVisual(snapshot);
 
     if (snapshot.mode === 'playing') {
       this.updateFlight(deltaSeconds, snapshot);
@@ -185,18 +213,36 @@ export class PaperGliderGame {
   };
 
   private updateFlight(deltaSeconds: number, snapshot: GameSnapshot): void {
-    const response = 1 - Math.exp(-deltaSeconds * 6.4);
-    const deltaX = this.input.target.x - this.glider.position.x;
-    const deltaY = this.input.target.y - this.glider.position.y;
-    this.glider.position.x += deltaX * response;
-    this.glider.position.y += deltaY * response;
-    this.glider.rotation.z = MathUtils.lerp(this.glider.rotation.z, -deltaX * 0.16, response * 0.9);
-    this.glider.rotation.x = MathUtils.lerp(this.glider.rotation.x, deltaY * 0.1, response * 0.8);
-    this.glider.rotation.y = MathUtils.lerp(this.glider.rotation.y, -deltaX * 0.045, response);
+    const flight = this.dynamics.update(
+      deltaSeconds,
+      this.input.target.x,
+      this.input.target.y,
+      snapshot.wingFold,
+      snapshot.speedMultiplier,
+    );
+    const response = 1 - Math.exp(-deltaSeconds * 7.2);
+    const deltaX = this.input.target.x - flight.x;
+    const deltaY = this.input.target.y - flight.y;
+    this.glider.position.x = flight.x;
+    this.glider.position.y = flight.y;
+    this.glider.rotation.z = MathUtils.lerp(
+      this.glider.rotation.z,
+      -flight.velocityX * 0.13 - deltaX * 0.035,
+      response,
+    );
+    this.glider.rotation.x = MathUtils.lerp(
+      this.glider.rotation.x,
+      flight.velocityY * 0.115 + deltaY * 0.028,
+      response * 0.86,
+    );
+    this.glider.rotation.y = MathUtils.lerp(this.glider.rotation.y, -flight.velocityX * 0.035, response);
     this.glider.position.z = 0.62 + Math.sin(this.elapsed * 8.2) * 0.012;
 
     this.camera.position.x = MathUtils.lerp(this.camera.position.x, this.glider.position.x * 0.105, response * 0.35);
     this.camera.position.y = MathUtils.lerp(this.camera.position.y, 2.95 + (this.glider.position.y - 2.35) * 0.045, response * 0.3);
+    const targetFov = this.baseCameraFov + (snapshot.speedMultiplier - 1) * 14;
+    this.camera.fov = MathUtils.lerp(this.camera.fov, targetFov, response * 0.22);
+    this.camera.updateProjectionMatrix();
     this.camera.lookAt(this.camera.position.x * 0.16, 2.35, -11);
 
     this.world.update(deltaSeconds, snapshot.speed, this.elapsed);
@@ -263,6 +309,19 @@ export class PaperGliderGame {
   private updateUi(snapshot: GameSnapshot): void {
     this.scoreValue.textContent = String(snapshot.score).padStart(2, '0');
     this.bestValue.textContent = String(snapshot.best).padStart(2, '0');
+    const tuckedPercent = Math.round(snapshot.wingFold * 100);
+    this.wingStatus.textContent =
+      tuckedPercent < 5 ? 'Wings open' : tuckedPercent > 92 ? 'Wings tucked' : `Tucked ${tuckedPercent}%`;
+    this.speedMultiplier.textContent = `${snapshot.speedMultiplier.toFixed(2)}x`;
+    this.wingFill.style.width = `${tuckedPercent}%`;
+    this.liftFill.style.width = `${Math.round(this.dynamics.getSnapshot().lift * 100)}%`;
+    this.flightReadout.classList.toggle('is-folding', snapshot.folding);
+  }
+
+  private updateWingVisual(snapshot: GameSnapshot): void {
+    const foldAngle = snapshot.wingFold * 1.18;
+    this.leftWing.rotation.z = -foldAngle;
+    this.rightWing.rotation.z = foldAngle;
   }
 
   private popScore(): void {
@@ -271,6 +330,14 @@ export class PaperGliderGame {
     void this.scoreChip.offsetWidth;
     this.scoreChip.classList.add('is-popping');
     this.scoreTimer = window.setTimeout(() => this.scoreChip.classList.remove('is-popping'), 320);
+  }
+
+  private popWingsOpen(): void {
+    window.clearTimeout(this.wingTimer);
+    this.flightReadout.classList.remove('is-opening');
+    void this.flightReadout.offsetWidth;
+    this.flightReadout.classList.add('is-opening');
+    this.wingTimer = window.setTimeout(() => this.flightReadout.classList.remove('is-opening'), 360);
   }
 
   private addLights(): void {
@@ -292,8 +359,10 @@ export class PaperGliderGame {
     this.scene.add(sun);
   }
 
-  private createGlider(paperTexture: ReturnType<typeof createPaperTexture>): Group {
-    const group = new Group();
+  private createGlider(paperTexture: ReturnType<typeof createPaperTexture>): GliderRig {
+    const root = new Group();
+    const leftWingGroup = new Group();
+    const rightWingGroup = new Group();
     const paper = new MeshStandardMaterial({
       color: 0xf7f1df,
       map: paperTexture,
@@ -324,16 +393,18 @@ export class PaperGliderGame {
       [0, 0.09, -1.68, 0, 0.36, 0.72, 0.14, 0.03, 0.78],
       fold,
     );
-    group.add(leftWing, rightWing, leftFold, rightFold);
-    group.traverse((child) => {
+    leftWingGroup.add(leftWing, leftFold);
+    rightWingGroup.add(rightWing, rightFold);
+    root.add(leftWingGroup, rightWingGroup);
+    root.traverse((child) => {
       if (child instanceof Mesh) {
         child.castShadow = true;
         child.receiveShadow = true;
       }
     });
-    group.position.set(0, 2.35, 0.62);
-    group.scale.setScalar(0.72);
-    return group;
+    root.position.set(0, 2.35, 0.62);
+    root.scale.setScalar(0.72);
+    return { root, leftWing: leftWingGroup, rightWing: rightWingGroup };
   }
 
   private triangleMesh(vertices: number[], material: MeshStandardMaterial): Mesh {
@@ -379,7 +450,9 @@ export class PaperGliderGame {
     const width = Math.max(1, this.root.clientWidth);
     const height = Math.max(1, this.root.clientHeight);
     this.camera.aspect = width / height;
-    this.camera.fov = width < 640 ? 66 : 58;
+    this.baseCameraFov = width < 640 ? 66 : 58;
+    const snapshot = this.model.getSnapshot();
+    this.camera.fov = this.baseCameraFov + (snapshot.speedMultiplier - 1) * 14;
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, width < 640 ? 1.45 : 1.8));
     this.renderer.setSize(width, height, false);
@@ -409,9 +482,16 @@ export class PaperGliderGame {
       start: this.startRun,
       getSnapshot: () => {
         const nextRing = this.world.getNextRingPosition(this.nextRingScratch);
+        const flight = this.dynamics.getSnapshot();
         return {
           ...this.model.getSnapshot(),
-          player: { x: this.glider.position.x, y: this.glider.position.y },
+          player: {
+            x: flight.x,
+            y: flight.y,
+            velocityX: flight.velocityX,
+            velocityY: flight.velocityY,
+            lift: flight.lift,
+          },
           nextRing: nextRing ? { x: nextRing.x, y: nextRing.y, z: nextRing.z } : null,
         };
       },
@@ -454,16 +534,41 @@ export class PaperGliderGame {
           </div>
         </div>
 
-        <div class="controls-hint">Move your pointer · drag to glide</div>
+        <div class="flight-readout" aria-live="polite">
+          <div class="readout-heading">
+            <span class="wing-status">Wings open</span>
+            <strong class="speed-multiplier">1.00x</strong>
+          </div>
+          <div class="telemetry-line">
+            <span>Tuck</span>
+            <i class="telemetry-track"><b class="wing-fill"></b></i>
+          </div>
+          <div class="telemetry-line lift-line">
+            <span>Lift</span>
+            <i class="telemetry-track"><b class="lift-fill"></b></i>
+          </div>
+        </div>
+
+        <div class="controls-hint">Hold to tuck + boost &middot; double click / tap to open</div>
 
         <section class="overlay start-overlay is-visible" aria-labelledby="game-title">
           <div class="start-card">
             <p class="eyebrow">An endless afternoon</p>
             <h1 class="title" id="game-title">Paper <span>Glider</span></h1>
             <p class="intro">Thread the sunlit rooms, skim the furniture, and catch every golden ring.</p>
-            <div class="control-row">
-              <span class="control-icon" aria-hidden="true">↖</span>
-              <span>Move pointer or drag</span>
+            <div class="control-guide">
+              <div class="control-row">
+                <span class="control-icon" aria-hidden="true">&#8598;</span>
+                <span>Guide with pointer or drag</span>
+              </div>
+              <div class="control-row">
+                <span class="control-icon hold-icon" aria-hidden="true"></span>
+                <span>Hold either button to tuck + boost</span>
+              </div>
+              <div class="control-row">
+                <span class="control-icon double-icon" aria-hidden="true">&#8226;&#8226;</span>
+                <span>Double click / tap to open</span>
+              </div>
             </div>
             <button class="primary-button start-button" type="button">Take flight</button>
           </div>

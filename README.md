@@ -4,6 +4,12 @@ An endless, low-poly browser flying game built with Three.js, TypeScript, and Vi
 
 **Play online:** https://yushimoji.github.io/paper-glider/
 
+## Flight controls
+
+- Move the pointer or drag to steer. The glider carries momentum; diving stores pseudo-lift for a stronger pull-up without creating a stall or crash state.
+- Hold either mouse button or hold on touch to progressively tuck the wings. The tucked state persists and raises forward speed without passive decay.
+- Double-click or double-tap to instantly open the wings by one step. Opening is deliberately discrete; only holding can tuck them again.
+
 ## Run locally
 
 ```bash

@@ -5,6 +5,9 @@ export interface GameSnapshot {
   score: number;
   best: number;
   speed: number;
+  speedMultiplier: number;
+  wingFold: number;
+  folding: boolean;
   distance: number;
 }
 
@@ -24,6 +27,9 @@ export class GameModel {
   private score = 0;
   private best = readBestScore();
   private speed = 9.5;
+  private speedMultiplier = 1;
+  private wingFold = 0;
+  private folding = false;
   private distance = 0;
   private elapsed = 0;
 
@@ -31,16 +37,32 @@ export class GameModel {
     this.mode = 'playing';
     this.score = 0;
     this.speed = 9.5;
+    this.speedMultiplier = 1;
+    this.wingFold = 0;
+    this.folding = false;
     this.distance = 0;
     this.elapsed = 0;
   }
 
-  update(deltaSeconds: number): void {
+  update(deltaSeconds: number, folding: boolean): void {
     if (this.mode !== 'playing') return;
 
     this.elapsed += deltaSeconds;
-    this.speed = Math.min(22, 9.5 + this.elapsed * 0.12 + this.score * 0.52);
+    this.folding = folding;
+    if (folding) this.wingFold = Math.min(1, this.wingFold + deltaSeconds * 0.46);
+
+    this.speedMultiplier = 1 + Math.pow(this.wingFold, 1.18) * 0.42;
+    const cruiseSpeed = Math.min(22, 9.5 + this.elapsed * 0.12 + this.score * 0.52);
+    this.speed = cruiseSpeed * this.speedMultiplier;
     this.distance += this.speed * deltaSeconds;
+  }
+
+  unfoldWings(amount = 0.38): boolean {
+    if (this.mode !== 'playing' || this.wingFold <= 0) return false;
+
+    this.wingFold = Math.max(0, this.wingFold - amount);
+    this.speedMultiplier = 1 + Math.pow(this.wingFold, 1.18) * 0.42;
+    return true;
   }
 
   collectRing(): boolean {
@@ -68,6 +90,9 @@ export class GameModel {
       score: this.score,
       best: this.best,
       speed: this.speed,
+      speedMultiplier: this.speedMultiplier,
+      wingFold: this.wingFold,
+      folding: this.folding,
       distance: this.distance,
     };
   }
