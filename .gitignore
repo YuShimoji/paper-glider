@@ -1,6 +1,8 @@
 node_modules/
+.serena/
 dist/
 *.tsbuildinfo
 .playwright-cli/
+.playwright-mcp/
 output/playwright/
 .DS_Store
