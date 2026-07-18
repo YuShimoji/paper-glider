@@ -18,6 +18,9 @@ import {
   Vector3,
 } from 'three';
 import type { BufferGeometry, Material, Scene, Texture } from 'three';
+import { RingPathPlanner, ROOM_LENGTH } from './simulation/RingPath';
+import type { PlannedRing, RoomContentPlan } from './simulation/RingPath';
+import { randomUnit } from './simulation/RunSeed';
 
 export interface WorldCollider {
   anchor: Object3D;
@@ -28,6 +31,7 @@ export interface WorldCollider {
 export interface FlightRing {
   mesh: Mesh;
   collected: boolean;
+  plan: PlannedRing;
 }
 
 interface Curtain {
@@ -50,6 +54,7 @@ interface RoomSegment {
   curtains: Curtain[];
   pages: FloatingPage[];
   sequence: number;
+  plan: RoomContentPlan;
 }
 
 interface Theme {
@@ -58,9 +63,9 @@ interface Theme {
   curtain: MeshStandardMaterial;
 }
 
-const ROOM_LENGTH = 18;
 const ROOM_COUNT = 9;
 const WORLD_X = 5.5;
+const PAPER_TEXTURE_SEED = 0xa17e5eed;
 
 function mesh(geometry: BufferGeometry, material: Material, castShadow = true): Mesh {
   const result = new Mesh(geometry, material);
@@ -69,15 +74,12 @@ function mesh(geometry: BufferGeometry, material: Material, castShadow = true): 
   return result;
 }
 
-function seeded(sequence: number, salt: number): number {
-  const value = Math.sin(sequence * 91.77 + salt * 37.11) * 43758.5453;
-  return value - Math.floor(value);
-}
-
 export class CorridorWorld {
   readonly segments: RoomSegment[] = [];
   private readonly scene: Scene;
   private sequence = 0;
+  private runSeed: number;
+  private readonly pathPlanner: RingPathPlanner;
 
   private readonly unitBox = new BoxGeometry(1, 1, 1);
   private readonly ringGeometry = new TorusGeometry(1.05, 0.085, 8, 32);
@@ -112,6 +114,13 @@ export class CorridorWorld {
     roughness: 0.38,
     metalness: 0.12,
   });
+  private readonly challengeRingMaterial = new MeshStandardMaterial({
+    color: 0xf08a4c,
+    emissive: new Color(0xc14e2d),
+    emissiveIntensity: 0.7,
+    roughness: 0.34,
+    metalness: 0.14,
+  });
   private readonly pageMaterial: MeshStandardMaterial;
 
   private readonly themes: Theme[] = [
@@ -132,8 +141,10 @@ export class CorridorWorld {
     },
   ];
 
-  constructor(scene: Scene, paperTexture: Texture) {
+  constructor(scene: Scene, paperTexture: Texture, runSeed: number) {
     this.scene = scene;
+    this.runSeed = runSeed;
+    this.pathPlanner = new RingPathPlanner(runSeed);
     this.pageMaterial = new MeshStandardMaterial({
       color: 0xf5edda,
       map: paperTexture,
@@ -143,13 +154,15 @@ export class CorridorWorld {
     this.shapeCurtainGeometry();
   }
 
-  reset(): void {
+  reset(runSeed = this.runSeed, speed = 9.5): void {
     for (const segment of this.segments) this.scene.remove(segment.group);
     this.segments.length = 0;
     this.sequence = 0;
+    this.runSeed = runSeed;
+    this.pathPlanner.reset(runSeed);
 
     for (let index = 0; index < ROOM_COUNT; index += 1) {
-      const segment = this.createSegment(this.sequence, -14 - index * ROOM_LENGTH);
+      const segment = this.createSegment(this.sequence, -14 - index * ROOM_LENGTH, speed);
       this.sequence += 1;
       this.segments.push(segment);
       this.scene.add(segment.group);
@@ -179,7 +192,7 @@ export class CorridorWorld {
       }
     }
 
-    this.recyclePassedRooms();
+    this.recyclePassedRooms(speed);
   }
 
   getColliders(): WorldCollider[] {
@@ -191,9 +204,14 @@ export class CorridorWorld {
   }
 
   getNextRingPosition(target: Vector3): Vector3 | null {
+    const ring = this.getNextRing(target);
+    return ring ? target : null;
+  }
+
+  getNextRing(target: Vector3): FlightRing | null {
     let closestDistance = Number.POSITIVE_INFINITY;
     const candidate = new Vector3();
-    let found = false;
+    let found: FlightRing | null = null;
 
     for (const ring of this.getRings()) {
       if (ring.collected || !ring.mesh.visible) continue;
@@ -201,11 +219,11 @@ export class CorridorWorld {
       if (candidate.z <= 1 && Math.abs(candidate.z) < closestDistance) {
         closestDistance = Math.abs(candidate.z);
         target.copy(candidate);
-        found = true;
+        found = ring;
       }
     }
 
-    return found ? target : null;
+    return found;
   }
 
   collect(ring: FlightRing): void {
@@ -213,7 +231,7 @@ export class CorridorWorld {
     ring.mesh.visible = false;
   }
 
-  private recyclePassedRooms(): void {
+  private recyclePassedRooms(speed: number): void {
     let furthestZ = Math.min(...this.segments.map((segment) => segment.group.position.z));
 
     for (let index = 0; index < this.segments.length; index += 1) {
@@ -221,7 +239,7 @@ export class CorridorWorld {
       if (segment.group.position.z <= 13) continue;
 
       this.scene.remove(segment.group);
-      const replacement = this.createSegment(this.sequence, furthestZ - ROOM_LENGTH);
+      const replacement = this.createSegment(this.sequence, furthestZ - ROOM_LENGTH, speed);
       this.sequence += 1;
       furthestZ = replacement.group.position.z;
       this.segments[index] = replacement;
@@ -229,7 +247,7 @@ export class CorridorWorld {
     }
   }
 
-  private createSegment(sequence: number, z: number): RoomSegment {
+  private createSegment(sequence: number, z: number, speed: number): RoomSegment {
     const group = new Group();
     group.position.z = z;
     const colliders: WorldCollider[] = [];
@@ -237,12 +255,13 @@ export class CorridorWorld {
     const curtains: Curtain[] = [];
     const pages: FloatingPage[] = [];
     const theme = this.themes[sequence % this.themes.length];
+    const plan = this.pathPlanner.planRoom(sequence, speed);
 
     this.addArchitecture(group, theme, sequence, curtains);
-    this.addRoomContents(group, theme, sequence, colliders, rings);
+    this.addRoomContents(group, theme, plan, colliders, rings);
     this.addLoosePages(group, sequence, pages);
 
-    return { group, colliders, rings, curtains, pages, sequence };
+    return { group, colliders, rings, curtains, pages, sequence, plan };
   }
 
   private addArchitecture(group: Group, theme: Theme, sequence: number, curtains: Curtain[]): void {
@@ -304,57 +323,46 @@ export class CorridorWorld {
   private addRoomContents(
     group: Group,
     theme: Theme,
-    sequence: number,
+    plan: RoomContentPlan,
     colliders: WorldCollider[],
     rings: FlightRing[],
   ): void {
-    const pattern = sequence % 6;
-    const wobble = (seeded(sequence, 2) - 0.5) * 0.3;
+    for (const ring of plan.rings) this.addRing(group, ring, rings);
 
-    switch (pattern) {
-      case 0:
-        this.addRing(group, 0, 2.35 + wobble, -3.1, rings);
-        this.addBookcase(group, -4.4, 2.3, colliders);
-        this.addPlant(group, 4.25, 2.8, colliders);
-        break;
-      case 1:
-        this.addRing(group, -2.35, 1.72 + wobble, -2.7, rings);
-        this.addDesk(group, 1.7, -2.1, colliders, theme.accent);
-        this.addBookcase(group, 4.45, 3.7, colliders);
-        break;
-      case 2:
-        this.addRing(group, 2.25, 3.52 + wobble, -3.5, rings);
-        this.addSofa(group, -2.35, -2.8, colliders, theme.accent);
-        this.addFloorLamp(group, 4.1, 2.9, colliders);
-        break;
-      case 3:
-        this.addRing(group, 0, 4.12 + wobble, -3.1, rings);
-        this.addDesk(group, 0, -2.7, colliders, theme.accent);
-        this.addPlant(group, -4.25, 3.2, colliders);
-        break;
-      case 4:
-        this.addRing(group, -2.18, 2.65 + wobble, -3.1, rings);
-        this.addSofa(group, 2.45, -2.7, colliders, theme.accent);
-        this.addBookcase(group, 4.45, 3.8, colliders);
-        break;
-      case 5:
-        this.addRing(group, 2.15, 1.9 + wobble, -4.5, rings);
-        this.addRing(group, -2.05, 3.45 - wobble, 3.3, rings);
-        this.addLowCabinet(group, 0, -0.4, colliders, theme.accent);
-        this.addPlant(group, 4.25, 4.4, colliders);
-        break;
+    for (const obstacle of plan.obstacles) {
+      switch (obstacle.kind) {
+        case 'bookcase':
+          this.addBookcase(group, obstacle.x, obstacle.z, colliders);
+          break;
+        case 'plant':
+          this.addPlant(group, obstacle.x, obstacle.z, colliders);
+          break;
+        case 'desk':
+          this.addDesk(group, obstacle.x, obstacle.z, colliders, theme.accent);
+          break;
+        case 'sofa':
+          this.addSofa(group, obstacle.x, obstacle.z, colliders, theme.accent);
+          break;
+        case 'lamp':
+          this.addFloorLamp(group, obstacle.x, obstacle.z, colliders);
+          break;
+        case 'cabinet':
+          this.addLowCabinet(group, obstacle.x, obstacle.z, colliders, theme.accent);
+          break;
+      }
     }
   }
 
-  private addRing(group: Group, x: number, y: number, z: number, rings: FlightRing[]): void {
-    const ring = mesh(this.ringGeometry, this.ringMaterial, false);
-    ring.position.set(x, y, z);
+  private addRing(group: Group, plan: PlannedRing, rings: FlightRing[]): void {
+    const material = plan.challengeBonus > 0 ? this.challengeRingMaterial : this.ringMaterial;
+    const ring = mesh(this.ringGeometry, material, false);
+    ring.position.set(plan.x, plan.y, plan.z);
     group.add(ring);
 
     const inner = mesh(new TorusGeometry(0.86, 0.018, 4, 24), this.windowGlow, false);
     inner.position.z = 0.015;
     ring.add(inner);
-    rings.push({ mesh: ring, collected: false });
+    rings.push({ mesh: ring, collected: false, plan });
   }
 
   private addBookcase(group: Group, x: number, z: number, colliders: WorldCollider[]): void {
@@ -367,8 +375,8 @@ export class CorridorWorld {
 
     for (let index = 0; index < 8; index += 1) {
       const book = this.scaledBox(
-        0.09 + seeded(index, z) * 0.06,
-        0.34 + seeded(index, x) * 0.24,
+        0.09 + randomUnit(this.runSeed, index, z, 101) * 0.06,
+        0.34 + randomUnit(this.runSeed, index, x, 103) * 0.24,
         0.13,
         index % 3 === 0 ? this.clay : this.artInk,
         -0.36 + (index % 4) * 0.24,
@@ -455,7 +463,7 @@ export class CorridorWorld {
         0.45 + index * 0.22,
         Math.cos(index * 2.2) * 0.22,
       );
-      foliage.rotation.z = (seeded(index, z) - 0.5) * 0.8;
+      foliage.rotation.z = (randomUnit(this.runSeed, index, z, 107) - 0.5) * 0.8;
       plant.add(foliage);
     }
     group.add(plant);
@@ -482,7 +490,11 @@ export class CorridorWorld {
       frame.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
       frame.add(this.scaledBox(1.55, 1.3, 0.09, this.darkWood, 0, 0, 0));
       frame.add(this.scaledBox(1.33, 1.08, 0.1, index === 0 ? theme.accent : this.artInk, 0, 0, 0.06));
-      const shape = mesh(new TorusGeometry(0.26 + seeded(sequence, index) * 0.16, 0.035, 5, 12), this.trim, false);
+      const shape = mesh(
+        new TorusGeometry(0.26 + randomUnit(this.runSeed, sequence, index, 109) * 0.16, 0.035, 5, 12),
+        this.trim,
+        false,
+      );
       shape.position.z = 0.13;
       frame.add(shape);
       group.add(frame);
@@ -493,11 +505,15 @@ export class CorridorWorld {
     const count = sequence % 3 === 0 ? 2 : 1;
     for (let index = 0; index < count; index += 1) {
       const page = mesh(this.pageGeometry, this.pageMaterial, false);
-      const x = (seeded(sequence, 7 + index) - 0.5) * 6.8;
-      const y = 1.45 + seeded(sequence, 10 + index) * 2.8;
-      const z = -0.2 + (seeded(sequence, 13 + index) - 0.5) * 7.5;
+      const x = (randomUnit(this.runSeed, sequence, 7 + index) - 0.5) * 6.8;
+      const y = 1.45 + randomUnit(this.runSeed, sequence, 10 + index) * 2.8;
+      const z = -0.2 + (randomUnit(this.runSeed, sequence, 13 + index) - 0.5) * 7.5;
       page.position.set(x, y, z);
-      page.rotation.set(seeded(sequence, 17) * 0.7, seeded(sequence, 19) * 1.2, 0);
+      page.rotation.set(
+        randomUnit(this.runSeed, sequence, 17) * 0.7,
+        randomUnit(this.runSeed, sequence, 19) * 1.2,
+        0,
+      );
       group.add(page);
       pages.push({ mesh: page, phase: sequence * 0.83 + index * 2.1, baseY: y });
     }
@@ -584,20 +600,20 @@ export function createPaperTexture(): Texture {
   context.fillStyle = '#f3ecd8';
   context.fillRect(0, 0, 256, 256);
   for (let index = 0; index < 4200; index += 1) {
-    const alpha = 0.012 + seeded(index, 2) * 0.028;
-    const light = seeded(index, 4) > 0.5 ? 72 : 38;
+    const alpha = 0.012 + randomUnit(PAPER_TEXTURE_SEED, index, 2) * 0.028;
+    const light = randomUnit(PAPER_TEXTURE_SEED, index, 4) > 0.5 ? 72 : 38;
     context.fillStyle = `hsla(38, 24%, ${light}%, ${alpha})`;
-    const x = seeded(index, 6) * 256;
-    const y = seeded(index, 8) * 256;
-    const size = 0.3 + seeded(index, 10) * 1.2;
+    const x = randomUnit(PAPER_TEXTURE_SEED, index, 6) * 256;
+    const y = randomUnit(PAPER_TEXTURE_SEED, index, 8) * 256;
+    const size = 0.3 + randomUnit(PAPER_TEXTURE_SEED, index, 10) * 1.2;
     context.fillRect(x, y, size, size * 0.4);
   }
   context.strokeStyle = 'rgba(112, 94, 63, .07)';
   context.lineWidth = 0.5;
   for (let y = 12; y < 256; y += 19) {
     context.beginPath();
-    context.moveTo(0, y + seeded(y, 1));
-    context.lineTo(256, y + seeded(y, 2));
+    context.moveTo(0, y + randomUnit(PAPER_TEXTURE_SEED, y, 1));
+    context.lineTo(256, y + randomUnit(PAPER_TEXTURE_SEED, y, 2));
     context.stroke();
   }
 

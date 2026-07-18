@@ -2,7 +2,6 @@ import {
   ACESFilmicToneMapping,
   AmbientLight,
   BufferGeometry,
-  Clock,
   Color,
   DirectionalLight,
   DoubleSide,
@@ -27,17 +26,37 @@ import { FlightDynamics } from './FlightDynamics';
 import { flightTuning } from './FlightTuning';
 import {
   CorridorWorld,
-  clampDelta,
   collisionIntersects,
   corridorBounds,
   createPaperTexture,
   ringIntersects,
 } from './CorridorWorld';
 import type { GameSnapshot } from './GameModel';
+import { FrameClock } from './simulation/FrameClock';
+import {
+  formatRunSeed,
+  parseRunSeed,
+  randomUnit,
+  resolveRunSeed,
+  RUN_SEED_STORAGE_KEY,
+} from './simulation/RunSeed';
+import type { RunSeedSource, SeedStorage } from './simulation/RunSeed';
 
 interface DebugSnapshot extends GameSnapshot {
   player: { x: number; y: number; velocityX: number; velocityY: number; lift: number };
-  nextRing: { x: number; y: number; z: number } | null;
+  nextRing: {
+    x: number;
+    y: number;
+    z: number;
+    effort: number;
+    challengeBonus: number;
+    travelTime: number;
+  } | null;
+  runSeed: string;
+  seedSource: RunSeedSource;
+  visibilityPaused: boolean;
+  elapsed: number;
+  lastDeltaSeconds: number;
 }
 
 interface GliderRig {
@@ -53,7 +72,18 @@ declare global {
       getSnapshot: () => DebugSnapshot;
       aimAtNextRing: () => boolean;
       aimAtWall: () => void;
+      restartWithSeed: (seed: string | number) => boolean;
+      setVisibilityForTest: (hidden: boolean) => void;
+      prepareVisualForTest: () => void;
     };
+  }
+}
+
+function getLocalStorage(): SeedStorage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
   }
 }
 
@@ -62,7 +92,7 @@ export class PaperGliderGame {
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(58, 1, 0.1, 180);
-  private readonly clock = new Clock();
+  private readonly clock = new FrameClock();
   private readonly model = new GameModel();
   private readonly dynamics = new FlightDynamics();
   private readonly input: InputController;
@@ -82,6 +112,10 @@ export class PaperGliderGame {
   private scoreTimer: number | undefined;
   private wingTimer: number | undefined;
   private baseCameraFov = 58;
+  private runSeed: number;
+  private seedSource: RunSeedSource;
+  private visibilityPaused = false;
+  private contextLost = false;
 
   private readonly startOverlay: HTMLElement;
   private readonly gameoverOverlay: HTMLElement;
@@ -100,16 +134,28 @@ export class PaperGliderGame {
   private readonly speedMultiplier: HTMLElement;
   private readonly wingFill: HTMLElement;
   private readonly liftFill: HTMLElement;
+  private readonly routeBonusValue: HTMLElement;
+  private readonly boostChainValue: HTMLElement;
+  private readonly resultBonus: HTMLElement;
+  private readonly runSeedLabels: HTMLElement[];
 
   constructor(root: HTMLDivElement) {
     this.root = root;
     this.root.innerHTML = this.createMarkup();
+    const resolvedSeed = resolveRunSeed(
+      window.location.search,
+      getLocalStorage(),
+      typeof globalThis.crypto === 'undefined' ? null : globalThis.crypto,
+    );
+    this.runSeed = resolvedSeed.seed;
+    this.seedSource = resolvedSeed.source;
 
     const canvas = this.query<HTMLCanvasElement>('.game-canvas');
     this.renderer = new WebGLRenderer({
       canvas,
       antialias: true,
       powerPreference: 'high-performance',
+      preserveDrawingBuffer: import.meta.env.DEV,
     });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
@@ -134,6 +180,10 @@ export class PaperGliderGame {
     this.speedMultiplier = this.query('.speed-multiplier');
     this.wingFill = this.query('.wing-fill');
     this.liftFill = this.query('.lift-fill');
+    this.routeBonusValue = this.query('.route-bonus-value');
+    this.boostChainValue = this.query('.boost-chain-value');
+    this.resultBonus = this.query('.result-bonus');
+    this.runSeedLabels = [...this.root.querySelectorAll<HTMLElement>('.run-seed-value')];
 
     this.scene.background = new Color(0xb8c8b7);
     this.scene.fog = new Fog(0xb8c8b7, 24, 132);
@@ -147,8 +197,8 @@ export class PaperGliderGame {
     this.leftWing = gliderRig.leftWing;
     this.rightWing = gliderRig.rightWing;
     this.scene.add(this.glider);
-    this.world = new CorridorWorld(this.scene, paperTexture);
-    this.world.reset();
+    this.world = new CorridorWorld(this.scene, paperTexture, this.runSeed);
+    this.world.reset(this.runSeed);
 
     const dustSystem = this.createDust();
     this.dust = dustSystem.points;
@@ -160,11 +210,15 @@ export class PaperGliderGame {
     this.restartButton.addEventListener('click', this.startRun);
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.onGlobalKeyDown);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
     canvas.addEventListener('webglcontextlost', this.onContextLost);
     canvas.addEventListener('webglcontextrestored', this.onContextRestored);
 
     this.updateUi(this.model.getSnapshot());
+    this.updateSeedLabels();
     this.resize();
+    this.clock.resume();
+    this.applyVisibilityState(document.hidden);
     this.renderer.setAnimationLoop(this.animate);
     this.installDebugApi();
   }
@@ -173,14 +227,16 @@ export class PaperGliderGame {
     window.clearTimeout(this.hintTimer);
     this.model.start();
     this.bestAtLaunch = this.model.getSnapshot().best;
-    this.world.reset();
+    this.world.reset(this.runSeed, 9.5);
     this.input.reset();
     this.dynamics.reset();
-    this.input.setEnabled(true);
+    this.input.setEnabled(!this.visibilityPaused);
     this.glider.position.set(0, 2.35, 0.62);
     this.glider.rotation.set(0, 0, 0);
     this.glider.scale.setScalar(0.72);
     this.crashElapsed = 0;
+    this.elapsed = 0;
+    this.resetDust();
     this.overlayShown = false;
     this.startOverlay.classList.remove('is-visible');
     this.gameoverOverlay.classList.remove('is-visible');
@@ -189,8 +245,13 @@ export class PaperGliderGame {
     this.hintTimer = window.setTimeout(() => this.controlsHint.classList.remove('is-visible'), 5200);
   };
 
-  private readonly animate = (): void => {
-    const deltaSeconds = clampDelta(this.clock.getDelta());
+  private readonly animate = (timestampMs: number): void => {
+    const deltaSeconds = this.clock.tick(timestampMs);
+    if (this.contextLost) return;
+    if (this.visibilityPaused) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     this.elapsed += deltaSeconds;
     this.input.update(deltaSeconds);
     if (this.input.consumeUnfoldRequest() && this.model.unfoldWings()) this.popWingsOpen();
@@ -270,7 +331,10 @@ export class PaperGliderGame {
     for (const ring of this.world.getRings()) {
       if (!ringIntersects(this.glider.position, ring, this.scratch)) continue;
       this.world.collect(ring);
-      if (this.model.collectRing()) this.popScore();
+      const snapshot = this.model.getSnapshot();
+      const challengeBonus =
+        snapshot.speedMultiplier >= 1.12 ? ring.plan.challengeBonus : 0;
+      if (this.model.collectRing(challengeBonus)) this.popScore();
     }
   }
 
@@ -302,6 +366,7 @@ export class PaperGliderGame {
   private showGameover(snapshot: GameSnapshot): void {
     this.resultScore.textContent = String(snapshot.score).padStart(2, '0');
     this.resultBest.textContent = String(snapshot.best).padStart(2, '0');
+    this.resultBonus.textContent = String(snapshot.routeBonus).padStart(2, '0');
     this.newBest.classList.toggle('is-visible', snapshot.score > this.bestAtLaunch && snapshot.score > 0);
     this.gameoverOverlay.classList.add('is-visible');
     this.restartButton.focus({ preventScroll: true });
@@ -316,6 +381,8 @@ export class PaperGliderGame {
     this.speedMultiplier.textContent = `${snapshot.speedMultiplier.toFixed(2)}x`;
     this.wingFill.style.width = `${tuckedPercent}%`;
     this.liftFill.style.width = `${Math.round(this.dynamics.getSnapshot().lift * 100)}%`;
+    this.routeBonusValue.textContent = String(snapshot.routeBonus).padStart(2, '0');
+    this.boostChainValue.textContent = snapshot.boostChain > 0 ? `x${snapshot.boostChain}` : '—';
     this.flightReadout.classList.toggle('is-folding', snapshot.folding);
   }
 
@@ -418,11 +485,7 @@ export class PaperGliderGame {
   private createDust(): { points: Points; positions: Float32Array } {
     const count = window.matchMedia('(max-width: 700px)').matches ? 120 : 190;
     const positions = new Float32Array(count * 3);
-    for (let index = 0; index < count; index += 1) {
-      positions[index * 3] = (Math.random() - 0.5) * 10.5;
-      positions[index * 3 + 1] = Math.random() * 6;
-      positions[index * 3 + 2] = -Math.random() * 52 + 4;
-    }
+    this.populateDustPositions(positions);
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
     const material = new PointsMaterial({
@@ -434,6 +497,19 @@ export class PaperGliderGame {
       sizeAttenuation: true,
     });
     return { points: new Points(geometry, material), positions };
+  }
+
+  private populateDustPositions(positions: Float32Array): void {
+    for (let index = 0; index < positions.length / 3; index += 1) {
+      positions[index * 3] = (randomUnit(this.runSeed, index, 201) - 0.5) * 10.5;
+      positions[index * 3 + 1] = randomUnit(this.runSeed, index, 203) * 6;
+      positions[index * 3 + 2] = -randomUnit(this.runSeed, index, 205) * 52 + 4;
+    }
+  }
+
+  private resetDust(): void {
+    this.populateDustPositions(this.dustPositions);
+    this.dust.geometry.attributes.position.needsUpdate = true;
   }
 
   private updateDust(deltaSeconds: number, speed: number): void {
@@ -469,12 +545,53 @@ export class PaperGliderGame {
 
   private readonly onContextLost = (event: Event): void => {
     event.preventDefault();
+    this.contextLost = true;
     this.input.setEnabled(false);
+    this.clock.pause();
   };
 
   private readonly onContextRestored = (): void => {
-    this.startRun();
+    this.contextLost = false;
+    if (!this.visibilityPaused) this.clock.resume();
+    this.input.setEnabled(!this.visibilityPaused && this.model.getSnapshot().mode === 'playing');
   };
+
+  private readonly onVisibilityChange = (): void => {
+    this.applyVisibilityState(document.hidden);
+  };
+
+  private applyVisibilityState(hidden: boolean): void {
+    this.visibilityPaused = hidden;
+    this.root.classList.toggle('is-visibility-paused', hidden);
+    if (hidden) {
+      this.input.setEnabled(false);
+      this.clock.pause();
+      return;
+    }
+
+    this.clock.resume();
+    this.input.setEnabled(this.model.getSnapshot().mode === 'playing');
+  }
+
+  private updateSeedLabels(): void {
+    const formatted = formatRunSeed(this.runSeed);
+    for (const label of this.runSeedLabels) label.textContent = formatted;
+  }
+
+  private restartWithSeed(seedValue: string | number): boolean {
+    const parsed = typeof seedValue === 'number' ? seedValue >>> 0 : parseRunSeed(seedValue);
+    if (parsed === null) return false;
+    this.runSeed = parsed;
+    this.seedSource = 'query';
+    try {
+      getLocalStorage()?.setItem(RUN_SEED_STORAGE_KEY, formatRunSeed(parsed));
+    } catch {
+      // A debug replay remains valid for this page even when persistence is blocked.
+    }
+    this.updateSeedLabels();
+    this.startRun();
+    return true;
+  }
 
   private installDebugApi(): void {
     if (!import.meta.env.DEV) return;
@@ -482,7 +599,7 @@ export class PaperGliderGame {
     window.__paperGliderDebug = {
       start: this.startRun,
       getSnapshot: () => {
-        const nextRing = this.world.getNextRingPosition(this.nextRingScratch);
+        const nextRing = this.world.getNextRing(this.nextRingScratch);
         const flight = this.dynamics.getSnapshot();
         return {
           ...this.model.getSnapshot(),
@@ -493,7 +610,21 @@ export class PaperGliderGame {
             velocityY: flight.velocityY,
             lift: flight.lift,
           },
-          nextRing: nextRing ? { x: nextRing.x, y: nextRing.y, z: nextRing.z } : null,
+          nextRing: nextRing
+            ? {
+                x: this.nextRingScratch.x,
+                y: this.nextRingScratch.y,
+                z: this.nextRingScratch.z,
+                effort: nextRing.plan.effort,
+                challengeBonus: nextRing.plan.challengeBonus,
+                travelTime: nextRing.plan.envelope.travelTime,
+              }
+            : null,
+          runSeed: formatRunSeed(this.runSeed),
+          seedSource: this.seedSource,
+          visibilityPaused: this.visibilityPaused,
+          elapsed: this.elapsed,
+          lastDeltaSeconds: this.clock.getLastDeltaSeconds(),
         };
       },
       aimAtNextRing: () => {
@@ -503,6 +634,12 @@ export class PaperGliderGame {
         return true;
       },
       aimAtWall: () => this.input.setWorldTarget(4.72, 2.35),
+      restartWithSeed: (seed) => this.restartWithSeed(seed),
+      setVisibilityForTest: (hidden) => this.applyVisibilityState(hidden),
+      prepareVisualForTest: () => {
+        this.startRun();
+        this.applyVisibilityState(true);
+      },
     };
   }
 
@@ -548,6 +685,10 @@ export class PaperGliderGame {
             <span>Lift</span>
             <i class="telemetry-track"><b class="lift-fill"></b></i>
           </div>
+          <div class="route-readout">
+            <span>Line bonus <strong class="route-bonus-value">00</strong></span>
+            <span>Boost chain <strong class="boost-chain-value">—</strong></span>
+          </div>
         </div>
 
         <div class="controls-hint">Hold to tuck + boost &middot; double click / tap to open</div>
@@ -571,6 +712,7 @@ export class PaperGliderGame {
                 <span>Double click / tap to open</span>
               </div>
             </div>
+            <p class="run-seed">Run seed <strong class="run-seed-value">--------</strong></p>
             <button class="primary-button start-button" type="button">Take flight</button>
           </div>
         </section>
@@ -589,7 +731,12 @@ export class PaperGliderGame {
                 <span class="score-label">Best</span>
                 <strong class="result-best">00</strong>
               </div>
+              <div class="result-cell">
+                <span class="score-label">Line</span>
+                <strong class="result-bonus">00</strong>
+              </div>
             </div>
+            <p class="run-seed">Run seed <strong class="run-seed-value">--------</strong></p>
             <p class="new-best">New best flight</p>
             <button class="primary-button restart-button" type="button">Fly again</button>
           </div>

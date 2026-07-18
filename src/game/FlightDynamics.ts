@@ -9,6 +9,13 @@ export interface FlightDynamicsSnapshot {
   diveReserve: number;
 }
 
+export interface FlightDynamicsReset {
+  x?: number;
+  y?: number;
+  velocityX?: number;
+  velocityY?: number;
+}
+
 const SAFE_FLOOR = 0.2;
 const SAFE_CEILING = 5.55;
 
@@ -24,11 +31,11 @@ export class FlightDynamics {
   private lift = 0.48;
   private diveReserve = 0;
 
-  reset(): void {
-    this.x = 0;
-    this.y = 2.35;
-    this.velocityX = 0;
-    this.velocityY = 0;
+  reset(state: FlightDynamicsReset = {}): void {
+    this.x = state.x ?? 0;
+    this.y = state.y ?? 2.35;
+    this.velocityX = state.velocityX ?? 0;
+    this.velocityY = state.velocityY ?? 0;
     this.lift = 0.48;
     this.diveReserve = 0;
   }

@@ -211,6 +211,24 @@ button {
   animation: wing-open-pop 340ms ease-out;
 }
 
+.route-readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.route-readout strong {
+  color: #ffd68c;
+  font-variant-numeric: tabular-nums;
+}
+
 .score-chip {
   min-width: 88px;
   padding: 10px 15px 9px;
@@ -378,6 +396,20 @@ button {
   margin: 0 auto 24px;
 }
 
+.run-seed {
+  margin: -9px 0 18px;
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.run-seed strong {
+  color: var(--rust-dark);
+  font-variant-numeric: tabular-nums;
+}
+
 .control-guide .control-row {
   justify-content: flex-start;
   text-align: left;
@@ -464,7 +496,7 @@ button {
 
 .result-strip {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   margin: 0 auto 27px;
   overflow: hidden;
@@ -496,6 +528,10 @@ button {
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+}
+
+.gameover-card .run-seed {
+  margin: -12px 0 18px;
 }
 
 .new-best.is-visible {
@@ -557,7 +593,7 @@ button {
     top: max(68px, calc(env(safe-area-inset-top) + 58px));
     bottom: auto;
     left: max(14px, env(safe-area-inset-left));
-    width: 150px;
+    width: 168px;
     padding: 9px 10px 10px;
   }
 
@@ -568,6 +604,14 @@ button {
 
   .speed-multiplier {
     font-size: 14px;
+  }
+
+  .route-readout {
+    font-size: 6px;
+  }
+
+  .result-cell {
+    padding: 13px 8px;
   }
 
   .overlay {
