@@ -18,8 +18,10 @@ import {
   Vector3,
 } from 'three';
 import type { BufferGeometry, Material, Scene, Texture } from 'three';
+import type { WorkbenchRoomAssetLibrary } from './assets/WorkbenchRoomManifest';
 import { RingPathPlanner, ROOM_LENGTH } from './simulation/RingPath';
 import type { PlannedRing, RoomContentPlan } from './simulation/RingPath';
+import { getRoomArchetypeDirective } from './simulation/RoomArchetype';
 import { randomUnit } from './simulation/RunSeed';
 
 export interface WorldCollider {
@@ -57,6 +59,14 @@ interface RoomSegment {
   plan: RoomContentPlan;
 }
 
+export interface RoomDiagnostic {
+  readonly sequence: number;
+  readonly archetype: RoomContentPlan['archetype'];
+  readonly z: number;
+  readonly colliderLabels: readonly string[];
+  readonly rings: readonly Readonly<{ x: number; y: number; z: number; collected: boolean }>[];
+}
+
 interface Theme {
   wall: MeshStandardMaterial;
   accent: MeshStandardMaterial;
@@ -77,6 +87,7 @@ function mesh(geometry: BufferGeometry, material: Material, castShadow = true): 
 export class CorridorWorld {
   readonly segments: RoomSegment[] = [];
   private readonly scene: Scene;
+  private readonly assetLibrary: WorkbenchRoomAssetLibrary | null;
   private sequence = 0;
   private runSeed: number;
   private readonly pathPlanner: RingPathPlanner;
@@ -121,6 +132,14 @@ export class CorridorWorld {
     roughness: 0.34,
     metalness: 0.14,
   });
+  private readonly colliderDebugMaterial = new MeshBasicMaterial({
+    color: 0xe9473f,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.88,
+    depthTest: false,
+  });
+  private colliderDebugVisible = false;
   private readonly pageMaterial: MeshStandardMaterial;
 
   private readonly themes: Theme[] = [
@@ -141,8 +160,14 @@ export class CorridorWorld {
     },
   ];
 
-  constructor(scene: Scene, paperTexture: Texture, runSeed: number) {
+  constructor(
+    scene: Scene,
+    paperTexture: Texture,
+    runSeed: number,
+    assetLibrary: WorkbenchRoomAssetLibrary | null = null,
+  ) {
     this.scene = scene;
+    this.assetLibrary = assetLibrary;
     this.runSeed = runSeed;
     this.pathPlanner = new RingPathPlanner(runSeed);
     this.pageMaterial = new MeshStandardMaterial({
@@ -208,6 +233,50 @@ export class CorridorWorld {
     return ring ? target : null;
   }
 
+  getRoomDiagnostics(): readonly RoomDiagnostic[] {
+    return this.segments.map((segment) => ({
+      sequence: segment.sequence,
+      archetype: segment.plan.archetype,
+      z: segment.group.position.z,
+      colliderLabels: segment.colliders.map((collider) => collider.label),
+      rings: segment.rings.map((ring) => ({
+        x: ring.plan.x,
+        y: ring.plan.y,
+        z: ring.plan.z,
+        collected: ring.collected,
+      })),
+    }));
+  }
+
+  setColliderDebugVisible(visible: boolean): void {
+    this.colliderDebugVisible = visible;
+    for (const segment of this.segments) {
+      segment.group.traverse((node) => {
+        if (node.userData.isColliderDebug === true) node.visible = visible;
+      });
+    }
+  }
+
+  advanceDistanceForTest(distance: number, speed = 22): void {
+    const stepDistance = 4.5;
+    let remaining = Math.max(0, distance);
+    let elapsed = 0;
+    while (remaining > 0) {
+      const current = Math.min(stepDistance, remaining);
+      const delta = current / speed;
+      elapsed += delta;
+      this.update(delta, speed, elapsed);
+      remaining -= current;
+    }
+  }
+
+  setRoomPositionForTest(sequence: number, z: number): boolean {
+    const segment = this.segments.find((candidate) => candidate.sequence === sequence);
+    if (!segment) return false;
+    segment.group.position.z = z;
+    return true;
+  }
+
   getNextRing(target: Vector3): FlightRing | null {
     let closestDistance = Number.POSITIVE_INFINITY;
     const candidate = new Vector3();
@@ -255,10 +324,26 @@ export class CorridorWorld {
     const curtains: Curtain[] = [];
     const pages: FloatingPage[] = [];
     const theme = this.themes[sequence % this.themes.length];
-    const plan = this.pathPlanner.planRoom(sequence, speed);
+    const directive = getRoomArchetypeDirective(
+      this.runSeed,
+      sequence,
+      this.assetLibrary !== null,
+    );
+    const clearanceVolumes = directive.archetype === 'archive-gate'
+      ? this.assetLibrary?.obstacleVolumes
+      : undefined;
+    const plan = this.pathPlanner.planRoom(sequence, speed, {
+      archetype: directive.archetype,
+      clearanceVolumes,
+      passageTarget: directive.passageTarget,
+    });
 
     this.addArchitecture(group, theme, sequence, curtains);
-    this.addRoomContents(group, theme, plan, colliders, rings);
+    if (plan.archetype === 'archive-gate') {
+      this.addArchiveGateContents(group, plan, colliders, rings);
+    } else {
+      this.addRoomContents(group, theme, plan, colliders, rings);
+    }
     this.addLoosePages(group, sequence, pages);
 
     return { group, colliders, rings, curtains, pages, sequence, plan };
@@ -350,6 +435,25 @@ export class CorridorWorld {
           this.addLowCabinet(group, obstacle.x, obstacle.z, colliders, theme.accent);
           break;
       }
+    }
+  }
+
+  private addArchiveGateContents(
+    group: Group,
+    plan: RoomContentPlan,
+    colliders: WorldCollider[],
+    rings: FlightRing[],
+  ): void {
+    if (!this.assetLibrary) throw new Error('Archive Gate room selected without a validated asset library.');
+    for (const ring of plan.rings) this.addRing(group, ring, rings);
+    group.add(this.assetLibrary.createArchiveGateClone());
+    for (const volume of this.assetLibrary.obstacleVolumes) {
+      const anchor = new Object3D();
+      anchor.position.set(volume.x, volume.y, volume.z);
+      group.add(anchor);
+      const half = new Vector3(volume.halfX, volume.halfY, volume.halfZ);
+      colliders.push({ anchor, half, label: volume.label });
+      this.addColliderDebugMesh(anchor, half);
     }
   }
 
@@ -530,6 +634,18 @@ export class CorridorWorld {
     anchor.position.copy(offset);
     parent.add(anchor);
     colliders.push({ anchor, half, label });
+    this.addColliderDebugMesh(anchor, half);
+  }
+
+  private addColliderDebugMesh(anchor: Object3D, half: Vector3): void {
+    const debug = new Mesh(this.unitBox, this.colliderDebugMaterial);
+    debug.scale.set(half.x * 2, half.y * 2, half.z * 2);
+    debug.visible = this.colliderDebugVisible;
+    debug.renderOrder = 20;
+    debug.userData.isColliderDebug = true;
+    debug.castShadow = false;
+    debug.receiveShadow = false;
+    anchor.add(debug);
   }
 
   private scaledBox(

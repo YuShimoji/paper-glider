@@ -1,0 +1,313 @@
+{
+  "contractVersion": "paper-glider-compat-v1",
+  "paperGliderBaselineCommit": "3ad5ac1fbc6715f36f4b2d961754dfd8d7f35750",
+  "generatorVersion": "1.1.0",
+  "source": {
+    "recipeFile": "paper-glider-canary.recipe.json",
+    "recipeSchemaVersion": "0.1.0",
+    "projectId": "paper-glider-archive-gate-v1",
+    "recipeHash": "fnv1a-3383aa61",
+    "recipeSha256": "sha256:a757b3421d46aadc7b5d2b34cdd3adfbed72efb6cfae131ec9ed5833373e1486"
+  },
+  "coordinateSystem": {
+    "handedness": "right",
+    "upAxis": "+Y",
+    "forwardAxis": "-Z",
+    "unitMeters": 1
+  },
+  "placement": {
+    "pivot": [
+      0,
+      0,
+      0
+    ],
+    "origin": "floor-center",
+    "position": [
+      0,
+      -0.52,
+      0
+    ],
+    "rotationRadians": [
+      0,
+      0,
+      0
+    ],
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  "room": {
+    "id": "room-paper-glider-segment",
+    "width": 11.2,
+    "height": 6.8,
+    "length": 18,
+    "floorY": -0.52
+  },
+  "bounds": {
+    "min": [
+      -4.45,
+      0,
+      -0.9
+    ],
+    "max": [
+      4.45,
+      5.226928,
+      1.1
+    ],
+    "size": [
+      8.9,
+      5.226928,
+      2
+    ]
+  },
+  "counts": {
+    "visualNodeCount": 8,
+    "meshCount": 8,
+    "vertexCount": 594,
+    "triangleCount": 1064,
+    "materialCount": 8,
+    "materialDefinitionCount": 4,
+    "colliderCount": 3
+  },
+  "visualNodes": [
+    {
+      "id": "part-left-pier",
+      "name": "Left Pier",
+      "kind": "part",
+      "materialId": "mat-warm-wood"
+    },
+    {
+      "id": "part-right-pier",
+      "name": "Right Pier",
+      "kind": "part",
+      "materialId": "mat-warm-wood"
+    },
+    {
+      "id": "part-top-beam",
+      "name": "Top Beam",
+      "kind": "part",
+      "materialId": "mat-paper-cream"
+    },
+    {
+      "id": "part-left-plinth",
+      "name": "Left Plinth",
+      "kind": "part",
+      "materialId": "mat-paper-cream"
+    },
+    {
+      "id": "part-right-plinth",
+      "name": "Right Plinth",
+      "kind": "part",
+      "materialId": "mat-paper-cream"
+    },
+    {
+      "id": "part-left-beacon",
+      "name": "Left Beacon",
+      "kind": "part",
+      "materialId": "mat-clay-accent"
+    },
+    {
+      "id": "part-right-beacon",
+      "name": "Right Beacon",
+      "kind": "part",
+      "materialId": "mat-clay-accent"
+    },
+    {
+      "id": "spline-route-arch",
+      "name": "Route Arch",
+      "kind": "spline",
+      "materialId": "mat-route-gold"
+    }
+  ],
+  "materials": [
+    {
+      "id": "mat-paper-cream",
+      "name": "Paper Cream",
+      "color": "#e5d8bd",
+      "roughness": 0.92,
+      "metalness": 0,
+      "doubleSided": true,
+      "alphaMode": "OPAQUE",
+      "texture": null
+    },
+    {
+      "id": "mat-warm-wood",
+      "name": "Warm Wood",
+      "color": "#76513c",
+      "roughness": 0.86,
+      "metalness": 0.02,
+      "doubleSided": true,
+      "alphaMode": "OPAQUE",
+      "texture": null
+    },
+    {
+      "id": "mat-clay-accent",
+      "name": "Clay Accent",
+      "color": "#b86547",
+      "roughness": 0.9,
+      "metalness": 0.01,
+      "doubleSided": true,
+      "alphaMode": "OPAQUE",
+      "texture": null
+    },
+    {
+      "id": "mat-route-gold",
+      "name": "Route Gold",
+      "color": "#f6c66d",
+      "roughness": 0.38,
+      "metalness": 0.12,
+      "doubleSided": true,
+      "alphaMode": "OPAQUE",
+      "texture": null
+    }
+  ],
+  "colliders": [
+    {
+      "id": "collider-left-pier",
+      "label": "archive gate left pier",
+      "shape": "aabb",
+      "center": [
+        -3.65,
+        2.2,
+        0
+      ],
+      "halfExtents": [
+        0.55,
+        2.2,
+        0.7
+      ],
+      "visualNodeIds": [
+        "part-left-pier"
+      ]
+    },
+    {
+      "id": "collider-right-pier",
+      "label": "archive gate right pier",
+      "shape": "aabb",
+      "center": [
+        3.65,
+        2.2,
+        0
+      ],
+      "halfExtents": [
+        0.55,
+        2.2,
+        0.7
+      ],
+      "visualNodeIds": [
+        "part-right-pier"
+      ]
+    },
+    {
+      "id": "collider-top-beam",
+      "label": "archive gate top beam",
+      "shape": "aabb",
+      "center": [
+        0,
+        4.65,
+        0
+      ],
+      "halfExtents": [
+        4.2,
+        0.275,
+        0.7
+      ],
+      "visualNodeIds": [
+        "part-top-beam"
+      ]
+    }
+  ],
+  "sockets": [
+    {
+      "id": "socket-room-entry",
+      "type": "room-boundary",
+      "position": [
+        0,
+        2.35,
+        9
+      ],
+      "orientationRadians": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "compatibleTags": [
+        "paper-glider",
+        "room-segment",
+        "entry"
+      ]
+    },
+    {
+      "id": "socket-room-exit",
+      "type": "room-boundary",
+      "position": [
+        0,
+        2.35,
+        -9
+      ],
+      "orientationRadians": [
+        0,
+        0,
+        0
+      ],
+      "compatibleTags": [
+        "paper-glider",
+        "room-segment",
+        "exit"
+      ]
+    }
+  ],
+  "files": {
+    "recipe": {
+      "path": "paper-glider-canary.recipe.json",
+      "bytes": 4841,
+      "sha256": "sha256:a757b3421d46aadc7b5d2b34cdd3adfbed72efb6cfae131ec9ed5833373e1486"
+    },
+    "glb": {
+      "path": "paper-glider-archive-gate.glb",
+      "bytes": 30172,
+      "sha256": "sha256:e91d1a4b87c2c0a7d3c6698c320c13239b3751c03884b3a4c6b5b6853be1d019"
+    },
+    "rights": {
+      "path": "RIGHTS.md",
+      "bytes": 2657,
+      "sha256": "sha256:481eb1980eb1728eefb84c6a5fb5bdf307185e99e7089e511e927ebf49958c9f"
+    },
+    "schema": {
+      "path": "paper-glider-compat-manifest-v1.schema.json",
+      "bytes": 9028,
+      "sha256": "sha256:abbd570b742de3ae87904069dfd0b27f26a0e223999e1cfa760dec81a26a4e39"
+    }
+  },
+  "provenance": {
+    "author": "YuShimoji",
+    "method": "Generated from the versioned Workbench Recipe using engine-neutral MeshData and Three GLTFExporter; no copied Paper Glider code or third-party asset files.",
+    "thirdPartyAssets": [],
+    "license": "LicenseRef-PaperGlider-Project-Asset",
+    "rightsDocument": "docs/compat/paper-glider-v1/RIGHTS.md",
+    "ownerDecision": "A",
+    "ownerDecisionDate": "2026-07-19",
+    "rightsScope": "Paper Glider project development, repository storage, releases, GitHub Pages/public game distribution, browser delivery, maintenance, optimization, and collision-related derivative changes; no general-purpose third-party asset-library license.",
+    "publicationGate": "Rights gate resolved by Owner Decision A on 2026-07-19; publication still requires successful Paper Glider runtime integration and technical acceptance."
+  },
+  "fallback": {
+    "required": true,
+    "strategy": "retain-current-procedural-room",
+    "conditions": [
+      "manifest fetch or validation failure",
+      "GLB fetch or parse failure",
+      "content hash mismatch",
+      "required node or collider reference missing"
+    ]
+  },
+  "integration": {
+    "runtimeRecipeRequired": false,
+    "publishedBasePath": "/paper-glider/",
+    "relativeGlbPath": "assets/workbench/paper-glider-v1/paper-glider-archive-gate.glb",
+    "relativeManifestPath": "assets/workbench/paper-glider-v1/paper-glider-archive-gate.manifest.json",
+    "variantSelection": "Select the manifest by the existing deterministic room sequence/seed contract; do not call Math.random()."
+  },
+  "contentHash": "sha256:04461554becd391625cc834460196186e32a6c08a393e34c210bd1d45503d397"
+}

@@ -33,6 +33,9 @@ jobs:
       - name: Verify dependency tree
         run: npm ls --depth=0
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Lint
         run: npm run lint
 

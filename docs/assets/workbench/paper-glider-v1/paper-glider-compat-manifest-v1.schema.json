@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://yushimoji.github.io/codex-game-asset-workbench/schema/paper-glider-compat-manifest-v1.json",
+  "title": "Paper Glider Compatibility Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "paperGliderBaselineCommit", "generatorVersion", "source", "coordinateSystem", "placement", "room", "bounds", "counts", "visualNodes", "materials", "colliders", "sockets", "files", "provenance", "fallback", "integration", "contentHash"],
+  "properties": {
+    "contractVersion": { "const": "paper-glider-compat-v1" },
+    "paperGliderBaselineCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "generatorVersion": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recipeFile", "recipeSchemaVersion", "projectId", "recipeHash", "recipeSha256"],
+      "properties": {
+        "recipeFile": { "type": "string", "minLength": 1 },
+        "recipeSchemaVersion": { "const": "0.1.0" },
+        "projectId": { "type": "string", "minLength": 1 },
+        "recipeHash": { "type": "string", "pattern": "^fnv1a-[0-9a-f]{8}$" },
+        "recipeSha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "coordinateSystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handedness", "upAxis", "forwardAxis", "unitMeters"],
+      "properties": {
+        "handedness": { "const": "right" },
+        "upAxis": { "const": "+Y" },
+        "forwardAxis": { "const": "-Z" },
+        "unitMeters": { "const": 1 }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pivot", "origin", "position", "rotationRadians", "scale"],
+      "properties": {
+        "pivot": { "$ref": "#/definitions/vec3" },
+        "origin": { "const": "floor-center" },
+        "position": { "$ref": "#/definitions/vec3" },
+        "rotationRadians": { "$ref": "#/definitions/vec3" },
+        "scale": { "$ref": "#/definitions/vec3" }
+      }
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "width", "height", "length", "floorY"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "length": { "type": "number", "exclusiveMinimum": 0 },
+        "floorY": { "type": "number" }
+      }
+    },
+    "bounds": { "$ref": "#/definitions/bounds" },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["visualNodeCount", "meshCount", "vertexCount", "triangleCount", "materialCount", "materialDefinitionCount", "colliderCount"],
+      "properties": {
+        "visualNodeCount": { "type": "integer", "minimum": 1 },
+        "meshCount": { "type": "integer", "minimum": 1 },
+        "vertexCount": { "type": "integer", "minimum": 1 },
+        "triangleCount": { "type": "integer", "minimum": 1 },
+        "materialCount": { "type": "integer", "minimum": 1 },
+        "materialDefinitionCount": { "type": "integer", "minimum": 1 },
+        "colliderCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "visualNodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "kind", "materialId"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["part", "spline"] },
+          "materialId": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "materials": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "color", "roughness", "metalness", "doubleSided", "alphaMode", "texture"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+          "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
+          "metalness": { "type": "number", "minimum": 0, "maximum": 1 },
+          "doubleSided": { "type": "boolean" },
+          "alphaMode": { "enum": ["OPAQUE", "MASK", "BLEND"] },
+          "texture": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "colliders": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "shape", "center", "halfExtents", "visualNodeIds"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "shape": { "const": "aabb" },
+          "center": { "$ref": "#/definitions/vec3" },
+          "halfExtents": { "$ref": "#/definitions/positiveVec3" },
+          "visualNodeIds": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "sockets": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "position", "orientationRadians", "compatibleTags"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "minLength": 1 },
+          "position": { "$ref": "#/definitions/vec3" },
+          "orientationRadians": { "$ref": "#/definitions/vec3" },
+          "compatibleTags": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recipe", "glb", "rights", "schema"],
+      "properties": {
+        "recipe": { "$ref": "#/definitions/fileRecord" },
+        "glb": { "$ref": "#/definitions/fileRecord" },
+        "rights": { "$ref": "#/definitions/fileRecord" },
+        "schema": { "$ref": "#/definitions/fileRecord" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["author", "method", "thirdPartyAssets", "license", "rightsDocument", "ownerDecision", "ownerDecisionDate", "rightsScope", "publicationGate"],
+      "properties": {
+        "author": { "type": "string", "minLength": 1 },
+        "method": { "type": "string", "minLength": 1 },
+        "thirdPartyAssets": { "type": "array", "maxItems": 0 },
+        "license": { "const": "LicenseRef-PaperGlider-Project-Asset" },
+        "rightsDocument": { "const": "docs/compat/paper-glider-v1/RIGHTS.md" },
+        "ownerDecision": { "const": "A" },
+        "ownerDecisionDate": { "const": "2026-07-19" },
+        "rightsScope": { "type": "string", "minLength": 1 },
+        "publicationGate": { "type": "string", "minLength": 1 }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "strategy", "conditions"],
+      "properties": {
+        "required": { "const": true },
+        "strategy": { "const": "retain-current-procedural-room" },
+        "conditions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtimeRecipeRequired", "publishedBasePath", "relativeGlbPath", "relativeManifestPath", "variantSelection"],
+      "properties": {
+        "runtimeRecipeRequired": { "const": false },
+        "publishedBasePath": { "const": "/paper-glider/" },
+        "relativeGlbPath": { "type": "string", "minLength": 1 },
+        "relativeManifestPath": { "type": "string", "minLength": 1 },
+        "variantSelection": { "type": "string", "minLength": 1 }
+      }
+    },
+    "contentHash": { "$ref": "#/definitions/sha256" }
+  },
+  "definitions": {
+    "vec3": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+    "positiveVec3": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "exclusiveMinimum": 0 } },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max", "size"],
+      "properties": { "min": { "$ref": "#/definitions/vec3" }, "max": { "$ref": "#/definitions/vec3" }, "size": { "$ref": "#/definitions/positiveVec3" } }
+    },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/definitions/sha256" }
+      }
+    }
+  }
+}
