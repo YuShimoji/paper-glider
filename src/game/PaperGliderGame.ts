@@ -34,6 +34,14 @@ import {
 import type { GameSnapshot } from './GameModel';
 import { FrameClock } from './simulation/FrameClock';
 import {
+  createCleanLineState,
+  reduceCleanLineState,
+} from './simulation/ArchiveGateEncounter';
+import type {
+  ArchiveGateEncounterPhase,
+  CleanLineState,
+} from './simulation/ArchiveGateEncounter';
+import {
   formatRunSeed,
   parseRunSeed,
   randomUnit,
@@ -67,6 +75,7 @@ interface DebugSnapshot extends GameSnapshot {
     cloneCount: number;
   };
   rooms: readonly RoomDiagnostic[];
+  cleanLine: CleanLineState;
 }
 
 interface GliderRig {
@@ -131,6 +140,11 @@ export class PaperGliderGame {
   private visibilityPaused = false;
   private contextLost = false;
   private readonly assetLoadResult: WorkbenchAssetLoadResult;
+  private cleanLineState = createCleanLineState();
+  private observedEncounter: {
+    phase: ArchiveGateEncounterPhase;
+    commitSequence: number | null;
+  } = { phase: 'none', commitSequence: null };
 
   private readonly startOverlay: HTMLElement;
   private readonly gameoverOverlay: HTMLElement;
@@ -153,6 +167,7 @@ export class PaperGliderGame {
   private readonly boostChainValue: HTMLElement;
   private readonly resultBonus: HTMLElement;
   private readonly runSeedLabels: HTMLElement[];
+  private readonly cleanLineResult: HTMLElement;
 
   constructor(root: HTMLDivElement, assetLoadResult: WorkbenchAssetLoadResult) {
     this.root = root;
@@ -199,6 +214,7 @@ export class PaperGliderGame {
     this.routeBonusValue = this.query('.route-bonus-value');
     this.boostChainValue = this.query('.boost-chain-value');
     this.resultBonus = this.query('.result-bonus');
+    this.cleanLineResult = this.query('.clean-line-result');
     this.runSeedLabels = [...this.root.querySelectorAll<HTMLElement>('.run-seed-value')];
 
     this.scene.background = new Color(0xb8c8b7);
@@ -257,6 +273,9 @@ export class PaperGliderGame {
     this.glider.scale.setScalar(0.72);
     this.crashElapsed = 0;
     this.elapsed = 0;
+    this.cleanLineState = reduceCleanLineState(this.cleanLineState, { type: 'reset' });
+    this.observedEncounter = { phase: 'none', commitSequence: null };
+    this.updateCleanLineUi();
     this.resetDust();
     this.overlayShown = false;
     this.startOverlay.classList.remove('is-visible');
@@ -274,6 +293,10 @@ export class PaperGliderGame {
       return;
     }
     this.elapsed += deltaSeconds;
+    this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+      type: 'tick',
+      deltaSeconds,
+    });
     this.input.update(deltaSeconds);
     if (this.input.consumeUnfoldRequest() && this.model.unfoldWings()) this.popWingsOpen();
     this.model.update(deltaSeconds, this.input.isFolding());
@@ -292,6 +315,7 @@ export class PaperGliderGame {
 
     this.updateDust(deltaSeconds, snapshot.mode === 'playing' ? snapshot.speed : 1.3);
     this.updateUi(snapshot);
+    this.updateCleanLineUi();
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -329,6 +353,7 @@ export class PaperGliderGame {
     this.camera.lookAt(this.camera.position.x * 0.16, 2.35, -11);
 
     this.world.update(deltaSeconds, snapshot.speed, this.elapsed);
+    this.syncCleanLinePhase();
     this.checkRingCollection();
     this.checkCollisions();
   }
@@ -352,6 +377,12 @@ export class PaperGliderGame {
     for (const ring of this.world.getRings()) {
       if (!ringIntersects(this.glider.position, ring, this.scratch)) continue;
       this.world.collect(ring);
+      if (ring.plan.encounterPhase === 'commit' && ring.plan.encounterCommitSequence !== null) {
+        this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+          type: 'commit-ring-collected',
+          commitSequence: ring.plan.encounterCommitSequence,
+        });
+      }
       const snapshot = this.model.getSnapshot();
       const challengeBonus =
         snapshot.speedMultiplier >= 1.12 ? ring.plan.challengeBonus : 0;
@@ -371,6 +402,12 @@ export class PaperGliderGame {
 
     for (const collider of this.world.getColliders()) {
       if (!collisionIntersects(this.glider.position, collider, this.scratch)) continue;
+      if (collider.label.startsWith('archive gate') && this.cleanLineState.commitSequence !== null) {
+        this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+          type: 'archive-collider-contact',
+          commitSequence: this.cleanLineState.commitSequence,
+        });
+      }
       this.crash(`A ${collider.label} brought this flight back to earth.`);
       return;
     }
@@ -378,6 +415,8 @@ export class PaperGliderGame {
 
   private crash(message: string): void {
     if (!this.model.crash()) return;
+    this.cleanLineState = reduceCleanLineState(this.cleanLineState, { type: 'crash' });
+    this.updateCleanLineUi();
     this.input.setEnabled(false);
     this.root.classList.remove('is-playing');
     this.controlsHint.classList.remove('is-visible');
@@ -405,6 +444,37 @@ export class PaperGliderGame {
     this.routeBonusValue.textContent = String(snapshot.routeBonus).padStart(2, '0');
     this.boostChainValue.textContent = snapshot.boostChain > 0 ? `x${snapshot.boostChain}` : '—';
     this.flightReadout.classList.toggle('is-folding', snapshot.folding);
+  }
+
+  private syncCleanLinePhase(): void {
+    const current = this.world.getEncounterAtPlayer(this.glider.position.z);
+    if (
+      current.phase === this.observedEncounter.phase &&
+      current.commitSequence === this.observedEncounter.commitSequence
+    ) return;
+
+    if (
+      this.observedEncounter.phase === 'recovery' &&
+      this.observedEncounter.commitSequence !== null
+    ) {
+      this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+        type: 'recovery-exit',
+        commitSequence: this.observedEncounter.commitSequence,
+      });
+    }
+    if (current.phase !== 'none' && current.commitSequence !== null) {
+      this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+        type: 'enter-phase',
+        phase: current.phase,
+        commitSequence: current.commitSequence,
+      });
+    }
+    this.observedEncounter = current;
+  }
+
+  private updateCleanLineUi(): void {
+    this.cleanLineResult.classList.toggle('is-visible', this.cleanLineState.resultVisible);
+    this.cleanLineResult.setAttribute('aria-hidden', String(!this.cleanLineState.resultVisible));
   }
 
   private updateWingVisual(snapshot: GameSnapshot): void {
@@ -655,6 +725,7 @@ export class PaperGliderGame {
             ...assetMetrics,
           },
           rooms: this.world.getRoomDiagnostics(),
+          cleanLine: this.cleanLineState,
         };
       },
       aimAtNextRing: () => {
@@ -730,6 +801,11 @@ export class PaperGliderGame {
         </div>
 
         <div class="controls-hint">Hold to tuck + boost &middot; double click / tap to open</div>
+
+        <div class="clean-line-result" role="status" aria-live="polite" aria-hidden="true">
+          <span>Archive Gate</span>
+          <strong>CLEAN LINE</strong>
+        </div>
 
         <section class="overlay start-overlay is-visible" aria-labelledby="game-title">
           <div class="start-card">
