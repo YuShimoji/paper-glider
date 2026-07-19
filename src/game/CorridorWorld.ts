@@ -19,6 +19,7 @@ import {
 } from 'three';
 import type { BufferGeometry, Material, Scene, Texture } from 'three';
 import type { WorkbenchRoomAssetLibrary } from './assets/WorkbenchRoomManifest';
+import type { ArchiveGateEncounterPhase } from './simulation/ArchiveGateEncounter';
 import { RingPathPlanner, ROOM_LENGTH } from './simulation/RingPath';
 import type { PlannedRing, RoomContentPlan } from './simulation/RingPath';
 import { getRoomArchetypeDirective } from './simulation/RoomArchetype';
@@ -47,6 +48,15 @@ interface FloatingPage {
   mesh: Mesh;
   phase: number;
   baseY: number;
+  baseRotationX: number;
+  baseRotationY: number;
+}
+
+interface FlightLineCue {
+  mesh: Mesh;
+  phase: number;
+  baseScale: number;
+  rotationDirection: number;
 }
 
 interface RoomSegment {
@@ -55,6 +65,7 @@ interface RoomSegment {
   rings: FlightRing[];
   curtains: Curtain[];
   pages: FloatingPage[];
+  flightLineCues: FlightLineCue[];
   sequence: number;
   plan: RoomContentPlan;
 }
@@ -64,7 +75,21 @@ export interface RoomDiagnostic {
   readonly archetype: RoomContentPlan['archetype'];
   readonly z: number;
   readonly colliderLabels: readonly string[];
-  readonly rings: readonly Readonly<{ x: number; y: number; z: number; collected: boolean }>[];
+  readonly encounterPhase: ArchiveGateEncounterPhase;
+  readonly encounterCommitSequence: number | null;
+  readonly cueCount: number;
+  readonly rings: readonly Readonly<{
+    x: number;
+    y: number;
+    z: number;
+    collected: boolean;
+    encounterPhase: ArchiveGateEncounterPhase;
+  }>[];
+}
+
+export interface WorldEncounterPhase {
+  readonly phase: ArchiveGateEncounterPhase;
+  readonly commitSequence: number | null;
 }
 
 interface Theme {
@@ -94,6 +119,7 @@ export class CorridorWorld {
 
   private readonly unitBox = new BoxGeometry(1, 1, 1);
   private readonly ringGeometry = new TorusGeometry(1.05, 0.085, 8, 32);
+  private readonly flightLineCueGeometry = new TorusGeometry(0.42, 0.045, 6, 20);
   private readonly pageGeometry = new PlaneGeometry(0.7, 0.48);
   private readonly curtainGeometry = new PlaneGeometry(1.4, 2.65, 5, 7);
   private readonly potGeometry = new CylinderGeometry(0.34, 0.25, 0.58, 8);
@@ -131,6 +157,39 @@ export class CorridorWorld {
     emissiveIntensity: 0.7,
     roughness: 0.34,
     metalness: 0.14,
+  });
+  private readonly approachRingMaterial = new MeshStandardMaterial({
+    color: 0xf4cf77,
+    emissive: new Color(0x588f72),
+    emissiveIntensity: 0.88,
+    roughness: 0.34,
+    metalness: 0.12,
+  });
+  private readonly commitRingMaterial = new MeshStandardMaterial({
+    color: 0xffdc82,
+    emissive: new Color(0x3f9b88),
+    emissiveIntensity: 1.05,
+    roughness: 0.3,
+    metalness: 0.14,
+  });
+  private readonly recoveryRingMaterial = new MeshStandardMaterial({
+    color: 0xb9d7a8,
+    emissive: new Color(0x3f7765),
+    emissiveIntensity: 0.72,
+    roughness: 0.4,
+    metalness: 0.08,
+  });
+  private readonly approachCueMaterial = new MeshBasicMaterial({
+    color: 0xf5cf75,
+    transparent: true,
+    opacity: 0.78,
+    depthWrite: false,
+  });
+  private readonly recoveryCueMaterial = new MeshBasicMaterial({
+    color: 0x9ec4a1,
+    transparent: true,
+    opacity: 0.66,
+    depthWrite: false,
   });
   private readonly colliderDebugMaterial = new MeshBasicMaterial({
     color: 0xe9473f,
@@ -215,6 +274,12 @@ export class CorridorWorld {
         page.mesh.rotation.x += deltaSeconds * 0.34;
         page.mesh.rotation.z = Math.sin(elapsed * 1.1 + page.phase) * 0.42;
       }
+
+      for (const cue of segment.flightLineCues) {
+        const pulse = 1 + Math.sin(elapsed * 2.8 + cue.phase) * 0.13;
+        cue.mesh.scale.setScalar(cue.baseScale * pulse);
+        cue.mesh.rotation.z += deltaSeconds * 0.52 * cue.rotationDirection;
+      }
     }
 
     this.recyclePassedRooms(speed);
@@ -239,13 +304,34 @@ export class CorridorWorld {
       archetype: segment.plan.archetype,
       z: segment.group.position.z,
       colliderLabels: segment.colliders.map((collider) => collider.label),
+      encounterPhase: segment.plan.encounterPhase,
+      encounterCommitSequence: segment.plan.encounterCommitSequence,
+      cueCount: segment.flightLineCues.length,
       rings: segment.rings.map((ring) => ({
         x: ring.plan.x,
         y: ring.plan.y,
         z: ring.plan.z,
         collected: ring.collected,
+        encounterPhase: ring.plan.encounterPhase,
       })),
     }));
+  }
+
+  getEncounterAtPlayer(playerZ: number): WorldEncounterPhase {
+    const candidate = this.segments
+      .filter((segment) => (
+        segment.group.position.z - ROOM_LENGTH / 2 <= playerZ &&
+        segment.group.position.z + ROOM_LENGTH / 2 > playerZ
+      ))
+      .sort((left, right) => (
+        Math.abs(left.group.position.z - playerZ) - Math.abs(right.group.position.z - playerZ)
+      ))[0];
+    return candidate
+      ? {
+          phase: candidate.plan.encounterPhase,
+          commitSequence: candidate.plan.encounterCommitSequence,
+        }
+      : { phase: 'none', commitSequence: null };
   }
 
   setColliderDebugVisible(visible: boolean): void {
@@ -323,6 +409,7 @@ export class CorridorWorld {
     const rings: FlightRing[] = [];
     const curtains: Curtain[] = [];
     const pages: FloatingPage[] = [];
+    const flightLineCues: FlightLineCue[] = [];
     const theme = this.themes[sequence % this.themes.length];
     const directive = getRoomArchetypeDirective(
       this.runSeed,
@@ -336,9 +423,14 @@ export class CorridorWorld {
       archetype: directive.archetype,
       clearanceVolumes,
       passageTarget: directive.passageTarget,
+      encounterPhase: directive.encounterPhase,
+      encounterCommitSequence: directive.encounterCommitSequence,
     });
 
     this.addArchitecture(group, theme, sequence, curtains);
+    if (plan.encounterPhase === 'approach' || plan.encounterPhase === 'recovery') {
+      this.addFlightLineCues(group, plan.encounterPhase, sequence, flightLineCues);
+    }
     if (plan.archetype === 'archive-gate') {
       this.addArchiveGateContents(group, plan, colliders, rings);
     } else {
@@ -346,7 +438,7 @@ export class CorridorWorld {
     }
     this.addLoosePages(group, sequence, pages);
 
-    return { group, colliders, rings, curtains, pages, sequence, plan };
+    return { group, colliders, rings, curtains, pages, flightLineCues, sequence, plan };
   }
 
   private addArchitecture(group: Group, theme: Theme, sequence: number, curtains: Curtain[]): void {
@@ -458,7 +550,15 @@ export class CorridorWorld {
   }
 
   private addRing(group: Group, plan: PlannedRing, rings: FlightRing[]): void {
-    const material = plan.challengeBonus > 0 ? this.challengeRingMaterial : this.ringMaterial;
+    const material = plan.encounterPhase === 'approach'
+      ? this.approachRingMaterial
+      : plan.encounterPhase === 'commit'
+        ? this.commitRingMaterial
+        : plan.encounterPhase === 'recovery'
+          ? this.recoveryRingMaterial
+          : plan.challengeBonus > 0
+            ? this.challengeRingMaterial
+            : this.ringMaterial;
     const ring = mesh(this.ringGeometry, material, false);
     ring.position.set(plan.x, plan.y, plan.z);
     group.add(ring);
@@ -467,6 +567,54 @@ export class CorridorWorld {
     inner.position.z = 0.015;
     ring.add(inner);
     rings.push({ mesh: ring, collected: false, plan });
+  }
+
+  normalizeAnimationForTest(): void {
+    for (const segment of this.segments) {
+      for (const ring of segment.rings) ring.mesh.rotation.set(0, 0, 0);
+      for (const curtain of segment.curtains) {
+        const breeze = Math.sin(curtain.phase);
+        curtain.mesh.rotation.z = breeze * 0.045;
+        curtain.mesh.scale.y = curtain.baseScale * (1 + breeze * 0.018);
+        curtain.mesh.position.x = curtain.baseX + Math.sin(curtain.phase) * 0.035;
+      }
+      for (const page of segment.pages) {
+        page.mesh.position.y = page.baseY + Math.sin(page.phase) * 0.22;
+        page.mesh.rotation.set(
+          page.baseRotationX,
+          page.baseRotationY,
+          Math.sin(page.phase) * 0.42,
+        );
+      }
+      for (const cue of segment.flightLineCues) {
+        cue.mesh.scale.setScalar(cue.baseScale * (1 + Math.sin(cue.phase) * 0.13));
+        cue.mesh.rotation.z = 0;
+      }
+    }
+  }
+
+  private addFlightLineCues(
+    group: Group,
+    phase: 'approach' | 'recovery',
+    sequence: number,
+    cues: FlightLineCue[],
+  ): void {
+    const material = phase === 'approach' ? this.approachCueMaterial : this.recoveryCueMaterial;
+    const z = phase === 'approach' ? -5.4 : -2.6;
+    const y = phase === 'approach' ? 3.22 : 2.82;
+    for (const [index, x] of [-4.65, 4.65].entries()) {
+      const cue = mesh(this.flightLineCueGeometry, material, false);
+      cue.position.set(x, y, z);
+      cue.scale.setScalar(phase === 'approach' ? 1 : 0.82);
+      cue.renderOrder = 4;
+      group.add(cue);
+      cues.push({
+        mesh: cue,
+        phase: sequence * 0.61 + index * Math.PI,
+        baseScale: cue.scale.x,
+        rotationDirection: index === 0 ? -1 : 1,
+      });
+    }
   }
 
   private addBookcase(group: Group, x: number, z: number, colliders: WorldCollider[]): void {
@@ -619,7 +767,13 @@ export class CorridorWorld {
         0,
       );
       group.add(page);
-      pages.push({ mesh: page, phase: sequence * 0.83 + index * 2.1, baseY: y });
+      pages.push({
+        mesh: page,
+        phase: sequence * 0.83 + index * 2.1,
+        baseY: y,
+        baseRotationX: page.rotation.x,
+        baseRotationY: page.rotation.y,
+      });
     }
   }
 
