@@ -1,5 +1,4 @@
 import type { Group } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   findMissingVisualNodes,
   validateWorkbenchRoomManifest,
@@ -75,7 +74,8 @@ export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function defaultParseGlb(buffer: ArrayBuffer, resourcePath: string): Promise<ParsedGlb> {
+async function defaultParseGlb(buffer: ArrayBuffer, resourcePath: string): Promise<ParsedGlb> {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
   const loader = new GLTFLoader();
   return loader.parseAsync(buffer, resourcePath);
 }

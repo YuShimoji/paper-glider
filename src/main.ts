@@ -1,6 +1,5 @@
 import './styles.css';
 import { PaperGliderGame } from './game/PaperGliderGame';
-import { preloadWorkbenchRoomAsset } from './game/assets/WorkbenchRoomAssetLoader';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -10,6 +9,7 @@ if (!app) {
 const root = app;
 
 async function boot(): Promise<void> {
+  const { preloadWorkbenchRoomAsset } = await import('./game/assets/WorkbenchRoomAssetLoader');
   const assetResult = await preloadWorkbenchRoomAsset({ baseUrl: import.meta.env.BASE_URL });
   new PaperGliderGame(root, assetResult);
 }

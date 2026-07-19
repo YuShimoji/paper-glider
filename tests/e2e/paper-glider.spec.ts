@@ -13,6 +13,20 @@ interface DebugSnapshot {
   visibilityPaused: boolean;
   elapsed: number;
   lastDeltaSeconds: number;
+  asset: {
+    status: 'loaded' | 'procedural-fallback';
+    failureCode: string | null;
+    fetchCount: number;
+    parseCount: number;
+    cloneCount: number;
+  };
+  rooms: Array<{
+    sequence: number;
+    archetype: 'procedural' | 'archive-gate';
+    z: number;
+    colliderLabels: string[];
+    rings: Array<{ x: number; y: number; z: number; collected: boolean }>;
+  }>;
 }
 
 async function snapshot(page: import('@playwright/test').Page): Promise<DebugSnapshot> {
@@ -34,6 +48,32 @@ function collectRuntimeErrors(page: import('@playwright/test').Page): string[] {
 async function startFlight(page: import('@playwright/test').Page): Promise<void> {
   await page.getByRole('button', { name: 'Take flight' }).click({ force: true });
   await expect.poll(async () => (await snapshot(page)).mode).toBe('playing');
+}
+
+async function gotoArchiveGate(page: import('@playwright/test').Page): Promise<void> {
+  await page.goto('?seed=1BADB00F');
+  await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
+  await expect.poll(async () => (await snapshot(page)).asset.status).toBe('loaded');
+}
+
+async function prepareArchiveGateVisual(
+  page: import('@playwright/test').Page,
+  options: { colliders?: boolean; recycled?: boolean } = {},
+): Promise<void> {
+  await page.evaluate(({ colliders, recycled }) => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.restartWithSeed('1BADB00F');
+    if (recycled) debug.advanceRoomsForTest(180);
+    const sequence = recycled ? 9 : 0;
+    debug.setRoomPositionForTest(sequence, -7.2);
+    const room = debug.getSnapshot().rooms.find((candidate) => candidate.sequence === sequence);
+    const ring = room?.rings[0];
+    if (ring) debug.setFlightStateForTest(ring.x, ring.y);
+    debug.setColliderDebugVisible(Boolean(colliders));
+    debug.setVisibilityForTest(true);
+  }, options);
+  await page.waitForTimeout(120);
 }
 
 async function pointerDown(
@@ -156,6 +196,122 @@ test('replays a named seed and reaches the high-speed wing state', async ({ page
   expect(errors).toEqual([]);
 });
 
+test('loads Archive Gate once and preserves deterministic room and ring replay', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await gotoArchiveGate(page);
+  const first = await snapshot(page);
+  expect(first.asset).toEqual({
+    status: 'loaded',
+    failureCode: null,
+    fetchCount: 2,
+    parseCount: 1,
+    cloneCount: 1,
+  });
+  expect(first.rooms[0]).toMatchObject({
+    sequence: 0,
+    archetype: 'archive-gate',
+    colliderLabels: [
+      'archive gate left pier',
+      'archive gate right pier',
+      'archive gate top beam',
+    ],
+  });
+  const firstRoute = first.rooms.map((room) => ({
+    sequence: room.sequence,
+    archetype: room.archetype,
+    rings: room.rings.map(({ x, y, z }) => ({ x, y, z })),
+  }));
+  await page.evaluate(() => window.__paperGliderDebug?.restartWithSeed('1BADB00F'));
+  const replay = await snapshot(page);
+  expect(replay.rooms.map((room) => ({
+    sequence: room.sequence,
+    archetype: room.archetype,
+    rings: room.rings.map(({ x, y, z }) => ({ x, y, z })),
+  }))).toEqual(firstRoute);
+  expect(replay.asset.fetchCount).toBe(2);
+  expect(replay.asset.parseCount).toBe(1);
+  expect(replay.asset.cloneCount).toBe(2);
+  expect(errors).toEqual([]);
+});
+
+test('flies the central passage and collides with both manifest pier and top beam', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await gotoArchiveGate(page);
+  await startFlight(page);
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    const gate = debug?.getSnapshot().rooms.find((room) => room.sequence === 0);
+    const ring = gate?.rings[0];
+    if (!debug || !ring) throw new Error('Archive Gate ring was unavailable.');
+    debug.setFlightStateForTest(ring.x, ring.y);
+    debug.setRoomPositionForTest(0, 0.62);
+  });
+  await expect.poll(async () => (await snapshot(page)).score).toBe(1);
+  expect((await snapshot(page)).mode).toBe('playing');
+
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    debug?.restartWithSeed('1BADB00F');
+    debug?.setFlightStateForTest(-3.65, 1.68);
+    debug?.setRoomPositionForTest(0, 0.62);
+  });
+  await expect.poll(async () => (await snapshot(page)).mode).toBe('gameover');
+  await expect(page.locator('.gameover-copy')).toHaveText(/archive gate left pier/i);
+
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    debug?.restartWithSeed('1BADB00F');
+    debug?.setFlightStateForTest(0, 4.13);
+    debug?.setRoomPositionForTest(0, 0.62);
+  });
+  await expect.poll(async () => (await snapshot(page)).mode).toBe('gameover');
+  await expect(page.locator('.gameover-copy')).toHaveText(/archive gate top beam/i);
+  expect(errors).toEqual([]);
+});
+
+test('recycles the nine-room pool and recreates Archive Gate without refetch or reparse', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await gotoArchiveGate(page);
+  await page.evaluate(() => window.__paperGliderDebug?.advanceRoomsForTest(180));
+  const recycled = await snapshot(page);
+  expect(recycled.rooms.every((room) => room.sequence >= 9)).toBe(true);
+  expect(recycled.rooms.some((room) => room.sequence === 9 && room.archetype === 'archive-gate')).toBe(true);
+  expect(recycled.asset).toEqual({
+    status: 'loaded',
+    failureCode: null,
+    fetchCount: 2,
+    parseCount: 1,
+    cloneCount: 2,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('times out asset preload and starts the procedural fallback', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'One real-browser timeout proof is sufficient.');
+  const errors = collectRuntimeErrors(page);
+  await page.route('**/paper-glider-archive-gate.manifest.json', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 6_000));
+    try {
+      await route.continue();
+    } catch {
+      // The AbortController intentionally cancels this delayed request at five seconds.
+    }
+  });
+  await page.goto('?seed=1BADB00F');
+  await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
+  const fallback = await snapshot(page);
+  expect(fallback.asset).toEqual({
+    status: 'procedural-fallback',
+    failureCode: 'timeout',
+    fetchCount: 0,
+    parseCount: 0,
+    cloneCount: 0,
+  });
+  expect(fallback.rooms.every((room) => room.archetype === 'procedural')).toBe(true);
+  await startFlight(page);
+  expect(errors).toEqual([]);
+});
+
 test('@visual fixed gameplay frame', async ({ page }) => {
   const errors = collectRuntimeErrors(page);
   // Headless Chromium can perform one early software-WebGL context recycle. Reset only after it settles.
@@ -165,6 +321,73 @@ test('@visual fixed gameplay frame', async ({ page }) => {
   await expect(page.locator('.hud')).toBeVisible();
   const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
   expect(captured).toMatchSnapshot('gameplay.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual Archive Gate flight camera and mobile portrait', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await gotoArchiveGate(page);
+  await prepareArchiveGateVisual(page);
+  await expect(page.locator('.hud')).toBeVisible();
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('archive-gate-flight.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual Archive Gate collider and ring-clearance overlay', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'Collider evidence uses the desktop camera.');
+  const errors = collectRuntimeErrors(page);
+  await gotoArchiveGate(page);
+  await prepareArchiveGateVisual(page, { colliders: true });
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('archive-gate-colliders.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual Archive Gate after nine-room recycling', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'One recycled visual proof is sufficient.');
+  const errors = collectRuntimeErrors(page);
+  await gotoArchiveGate(page);
+  await prepareArchiveGateVisual(page, { recycled: true });
+  const recycled = await snapshot(page);
+  expect(recycled.rooms.every((room) => room.sequence >= 9)).toBe(true);
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('archive-gate-recycled.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual procedural fallback remains playable', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'One procedural fallback visual proof is sufficient.');
+  const errors = collectRuntimeErrors(page);
+  await page.route('**/paper-glider-archive-gate.manifest.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: '{}',
+  }));
+  await page.goto('?seed=1BADB00F');
+  await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
+  await expect.poll(async () => (await snapshot(page)).asset.status).toBe('procedural-fallback');
+  await page.evaluate(() => {
+    window.__paperGliderDebug?.prepareVisualForTest();
+    window.__paperGliderDebug?.setRoomPositionForTest(0, -7.2);
+  });
+  await page.waitForTimeout(120);
+  const fallback = await snapshot(page);
+  expect(fallback.rooms.every((room) => room.archetype === 'procedural')).toBe(true);
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('procedural-fallback.png', {
     threshold: 0.22,
     maxDiffPixelRatio: 0.012,
   });
