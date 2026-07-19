@@ -48,6 +48,8 @@ interface FloatingPage {
   mesh: Mesh;
   phase: number;
   baseY: number;
+  baseRotationX: number;
+  baseRotationY: number;
 }
 
 interface FlightLineCue {
@@ -567,6 +569,30 @@ export class CorridorWorld {
     rings.push({ mesh: ring, collected: false, plan });
   }
 
+  normalizeAnimationForTest(): void {
+    for (const segment of this.segments) {
+      for (const ring of segment.rings) ring.mesh.rotation.set(0, 0, 0);
+      for (const curtain of segment.curtains) {
+        const breeze = Math.sin(curtain.phase);
+        curtain.mesh.rotation.z = breeze * 0.045;
+        curtain.mesh.scale.y = curtain.baseScale * (1 + breeze * 0.018);
+        curtain.mesh.position.x = curtain.baseX + Math.sin(curtain.phase) * 0.035;
+      }
+      for (const page of segment.pages) {
+        page.mesh.position.y = page.baseY + Math.sin(page.phase) * 0.22;
+        page.mesh.rotation.set(
+          page.baseRotationX,
+          page.baseRotationY,
+          Math.sin(page.phase) * 0.42,
+        );
+      }
+      for (const cue of segment.flightLineCues) {
+        cue.mesh.scale.setScalar(cue.baseScale * (1 + Math.sin(cue.phase) * 0.13));
+        cue.mesh.rotation.z = 0;
+      }
+    }
+  }
+
   private addFlightLineCues(
     group: Group,
     phase: 'approach' | 'recovery',
@@ -741,7 +767,13 @@ export class CorridorWorld {
         0,
       );
       group.add(page);
-      pages.push({ mesh: page, phase: sequence * 0.83 + index * 2.1, baseY: y });
+      pages.push({
+        mesh: page,
+        phase: sequence * 0.83 + index * 2.1,
+        baseY: y,
+        baseRotationX: page.rotation.x,
+        baseRotationY: page.rotation.y,
+      });
     }
   }
 

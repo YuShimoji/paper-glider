@@ -34,6 +34,7 @@ import {
 import type { GameSnapshot } from './GameModel';
 import { FrameClock } from './simulation/FrameClock';
 import {
+  ARCHIVE_GATE_FLIGHT_LINE_COMMIT_INDEX,
   createCleanLineState,
   reduceCleanLineState,
 } from './simulation/ArchiveGateEncounter';
@@ -94,6 +95,8 @@ declare global {
       restartWithSeed: (seed: string | number) => boolean;
       setVisibilityForTest: (hidden: boolean) => void;
       prepareVisualForTest: () => void;
+      prepareCleanLineVisualForTest: () => void;
+      normalizeVisualForTest: () => void;
       setFlightStateForTest: (x: number, y: number) => void;
       setColliderDebugVisible: (visible: boolean) => void;
       advanceRoomsForTest: (distance: number) => void;
@@ -684,6 +687,18 @@ export class PaperGliderGame {
     return true;
   }
 
+  private normalizeVisualForTest(): void {
+    this.elapsed = 0;
+    this.world.normalizeAnimationForTest();
+    this.resetDust();
+    this.glider.position.set(0, 2.35, 0.62);
+    this.glider.rotation.set(0, 0, 0);
+    this.camera.position.set(0, 2.95, 7.65);
+    this.camera.fov = this.baseCameraFov;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(0, 2.35, -11);
+  }
+
   private installDebugApi(): void {
     if (!import.meta.env.DEV) return;
 
@@ -741,6 +756,46 @@ export class PaperGliderGame {
         this.startRun();
         this.applyVisibilityState(true);
       },
+      prepareCleanLineVisualForTest: () => {
+        this.startRun();
+        this.model.collectRing();
+        this.model.collectRing();
+        this.model.collectRing();
+        this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+          type: 'enter-phase',
+          phase: 'approach',
+          commitSequence: ARCHIVE_GATE_FLIGHT_LINE_COMMIT_INDEX,
+        });
+        this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+          type: 'enter-phase',
+          phase: 'commit',
+          commitSequence: ARCHIVE_GATE_FLIGHT_LINE_COMMIT_INDEX,
+        });
+        this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+          type: 'commit-ring-collected',
+          commitSequence: ARCHIVE_GATE_FLIGHT_LINE_COMMIT_INDEX,
+        });
+        this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+          type: 'enter-phase',
+          phase: 'recovery',
+          commitSequence: ARCHIVE_GATE_FLIGHT_LINE_COMMIT_INDEX,
+        });
+        this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
+          type: 'recovery-exit',
+          commitSequence: ARCHIVE_GATE_FLIGHT_LINE_COMMIT_INDEX,
+        });
+        for (const room of this.world.getRoomDiagnostics()) {
+          this.world.setRoomPositionForTest(
+            room.sequence,
+            room.sequence === 6 ? -7.2 : -120 - room.sequence * 18,
+          );
+        }
+        this.updateUi(this.model.getSnapshot());
+        this.updateCleanLineUi();
+        this.applyVisibilityState(true);
+        this.normalizeVisualForTest();
+      },
+      normalizeVisualForTest: () => this.normalizeVisualForTest(),
       setFlightStateForTest: (x, y) => {
         this.dynamics.reset({ x, y });
         this.input.setWorldTarget(x, y);
