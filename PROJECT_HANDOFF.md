@@ -4,229 +4,163 @@ This is the durable restart and supervising-AI entrypoint. Read it with `README.
 
 ## Current conclusion
 
-**PUBLISHED_WITH_VERIFIED_ARCHIVE_GATE**
+**READY_FOR_ARCHIVE_GATE_FLIGHT_LINE_PUBLICATION**
 
-PaperGlider Compatibility Packet v1 and its Archive Gate canary are integrated as a real, playable room archetype. The focused branch and `main` passed the technical gate; committed `docs/` is deployed by legacy GitHub Pages from `main:/docs`; and the fixed-seed public run loaded the real manifest and GLB, rendered the Gate, passed the central opening, collected its ring, and produced no console or page errors.
+PG-A2 implements a deterministic, playable Archive Gate Flight Line as three consecutive rooms: Approach, Gate Commit, and Recovery. The fixed canary, unit matrix, Chromium E2E, fixed desktop/mobile visuals, and local production preview are green on the focused branch. Publication remains gated on a clean exact-commit validation, focused-branch push, no-ff integration to `main`, the actual GitHub Actions run, legacy Pages completion, and public fixed-seed readback.
 
-This is a technical and browser-publication acceptance result. It does not claim physical-phone touch acceptance, low-end-device performance acceptance, or long-session human fairness acceptance.
+After those gates pass, this conclusion must be changed to `PUBLISHED_WITH_ARCHIVE_GATE_FLIGHT_LINE` and the exact run/commit evidence added. This is a technical/browser result only; physical-phone touch, low-end hardware, Firefox/WebKit, and long-session human feel remain unverified.
 
-## Live repository and publication state
+## Repository and publication state
 
 - Repository: https://github.com/YuShimoji/paper-glider
 - Public game: https://yushimoji.github.io/paper-glider/
-- Fixed Archive Gate run: https://yushimoji.github.io/paper-glider/?seed=1BADB00F
-- Starting baseline: `main` at `3ad5ac1fbc6715f36f4b2d961754dfd8d7f35750`, `HEAD...origin/main = 0/0`, clean.
-- Focused branch: `codex/workbench-archive-gate-room-v1`, accepted HEAD `c919828`, pushed with upstream parity `0/0`.
-- Main integration commit: `68ff271` (`Merge Archive Gate room integration`).
-- This file is a docs-only successor to the integration commit; use live `git rev-parse HEAD` for its final commit ID.
-- Code CI: https://github.com/YuShimoji/paper-glider/actions/runs/29678210540 — PASS, 4m12s.
-- Matching legacy Pages build: https://github.com/YuShimoji/paper-glider/actions/runs/29678210043 — PASS.
-- Pages API at acceptance: `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`.
-- No PR, tag, release, Actions Pages deployment, backend, CDN, telemetry, or external runtime API was introduced.
+- PG-A2 fixed run: https://yushimoji.github.io/paper-glider/?seed=1BADB068
+- Starting baseline: `main` at `fa57859ca5ecb20328fdc50c77c626b1f00a05fd`, `HEAD...origin/main = 0/0`, clean.
+- Focused branch: `codex/archive-gate-flight-line-a2`; use live Git for its final accepted HEAD.
+- Publication source must remain GitHub Pages legacy `main:/docs`. Validation CI does not deploy Pages.
+- No PR, tag, release, backend, login, leaderboard, telemetry, CDN, or Actions Pages deployment is part of PG-A2.
+- An operator-owned preview was already listening on port 4173 at start and was not stopped or changed.
 
-## Rights and provenance authority
+## Rights and immutable asset authority
 
 - Rights identifier: `LicenseRef-PaperGlider-Project-Asset`.
-- Owner Decision A, dated 2026-07-19, permits copying, modification, optimization, collision adjustment, repository/release storage, GitHub Pages/public-game distribution, browser delivery, and Paper Glider maintenance derivatives.
-- Permission is Paper Glider project-scoped. It is not CC0, CC BY, MIT, or a general-purpose asset-library license.
-- Distributed authority: `public/assets/workbench/paper-glider-v1/RIGHTS.md`, copied byte-identically into `docs/assets/workbench/paper-glider-v1/RIGHTS.md`.
-- The Workbench Recipe was not copied, parsed, built, or shipped. Its recorded provenance values remain Recipe hash `fnv1a-3383aa61` and SHA-256 `a757b3421d46aadc7b5d2b34cdd3adfbed72efb6cfae131ec9ed5833373e1486`.
-- Rights permission and technical acceptance are separate. Both are satisfied for this Archive Gate publication, within the evidence boundaries below.
+- Owner Decision A permits Paper Glider project storage, modification, browser delivery, public-game distribution, and maintenance derivatives. It is not a general open-asset license.
+- Runtime source: `public/assets/workbench/paper-glider-v1/`; generated public copy: `docs/assets/workbench/paper-glider-v1/`.
+- The Workbench Recipe is not runtime input and must not be copied or published.
 
-## Versioned runtime assets
-
-Source placement and matching generated placement:
-
-- `public/assets/workbench/paper-glider-v1/`
-- `docs/assets/workbench/paper-glider-v1/`
-
-Pinned files:
-
-| File | Bytes | SHA-256 |
+| File | Bytes | Pinned SHA-256 |
 | --- | ---: | --- |
 | `paper-glider-archive-gate.glb` | 30,172 | `e91d1a4b87c2c0a7d3c6698c320c13239b3751c03884b3a4c6b5b6853be1d019` |
 | `paper-glider-archive-gate.manifest.json` | 7,345 | `b9c41a053e97d061ac4795c77d8f628e93f0a40adef6f718614e614c861e1bd5` |
 | `paper-glider-compat-manifest-v1.schema.json` | 9,028 | `abbd570b742de3ae87904069dfd0b27f26a0e223999e1cfa760dec81a26a4e39` |
 | `RIGHTS.md` | 2,657 | `481eb1980eb1728eefb84c6a5fb5bdf307185e99e7089e511e927ebf49958c9f` |
 
-`.gitattributes` marks both asset directories `-text`, so Windows clean checkouts preserve the pinned bytes. It also makes source `index.html` LF-stable and generated HTML/JS/CSS byte-stable. A clean Windows checkout was built and remained tracked-clean after generation.
+`.gitattributes` keeps both asset directories binary-stable on Windows. The Packet and Workbench are read-only authorities for this slice.
 
-## Runtime implementation
+## PG-A2 active artifact
 
-### Finite preload, hash, and fallback
+### Deterministic three-room cadence
 
-- `src/main.ts` dynamically imports and awaits `WorkbenchRoomAssetLoader` before constructing the run/world.
-- All URLs are derived from `import.meta.env.BASE_URL`; the accepted production paths begin `/paper-glider/assets/workbench/paper-glider-v1/`.
-- `ASSET_PRELOAD_TIMEOUT_MS = 5000`.
-- One `AbortController` bounds manifest fetch, GLB fetch, hashing, structural acceptance, and parse outcome. A late network/parse completion cannot replace rooms after the result is settled.
-- Web Crypto verifies the pinned manifest and GLB SHA-256 values before acceptance.
-- Runtime validation checks contract/axes, required keys and types, safe relative paths, finite placement, exact v1 transform/room contract, eight required visual Stable IDs, three positive AABBs, collider-to-visual references, fallback contract, rights LicenseRef, and Pages base contract.
-- Full Draft-07 schema validation and schema/RIGHTS/manifest/GLB hashes run in Vitest via pinned Ajv `8.20.0`.
-- Timeout, AbortError, manifest fetch/hash/parse/structure failures, GLB fetch/hash/parse failures, missing nodes, and invalid collider references all settle to a procedural-room library before world creation.
-- Fallback produces no deliberate runtime `console.error`; the game starts normally with procedural rooms.
+- `src/game/simulation/ArchiveGateEncounter.ts` is the pure planner and result reducer.
+- `ARCHIVE_GATE_FLIGHT_LINE_SEED = 0x1badb068` produces Approach room sequence 3, Commit sequence 4, and Recovery sequence 5.
+- Encounter selection uses only the normalized 32-bit run seed and room sequence through `randomUnit(seed, 911)`; it does not use `Math.random`, wall time, frame timing, fetch completion order, or renderer state.
+- The cadence repeats on a nine-room cycle. Recycled canary Commit is sequence 13.
+- Legacy seed `1BADB00F` remains a regression fixture, but its first complete encounter is moved to sequences 8–10 so a Gate never appears without an Approach.
+- Different seeds vary the encounter slot while preserving the same pure contract.
 
-### Cached render library and recycling
+### Approach, Commit, and Recovery
 
-- The real GLB is parsed once into a validated `WorkbenchRoomAssetLibrary`.
-- Room clones share the cached geometry and material resources. Each clone receives the manifest placement and Paper Glider shadow flags.
-- Recycled room groups are removed without disposing shared resources; new selected groups clone from the cache without refetch or reparse.
-- Accepted metrics for the nine-room recycle proof: manifest+GLB fetches `2`, parses `1`, initial Gate clone `1`, recycled Gate clone `2`.
-- Vite splits game code, Three core, the Workbench loader, and GLTFLoader. The accepted build has no chunk-size warning; largest chunk is Three core at 532.06 kB / 134.59 kB gzip.
+- Approach shows two low-cost in-world side cue toruses plus a reachable lead-in ring. The central flight corridor stays unobstructed.
+- Commit loads the existing Archive Gate GLB, keeps the manifest's three AABBs as the only collision authority, and places the target ring inside the central passage.
+- Recovery shows a restrained exit cue and reachable ring, then returns to ordinary room generation.
+- The planner reserves the three-room encounter from ordinary furniture. This prevents the encounter contract from being invalidated by unrelated procedural obstacles.
+- Ring targets converge over the preceding six-room envelope; the Flight Line does not obtain high-speed fairness merely by centralizing every ring.
 
-### AABB collision and central passage
+### CLEAN LINE rule
 
-- Collision authority is the three manifest AABBs, never render-mesh bounds.
-- Placement `[0,-0.52,0]` transforms the room-local centers to:
-  - left pier `[-3.65,1.68,0]`, half `[0.55,2.2,0.7]`;
-  - right pier `[3.65,1.68,0]`, half `[0.55,2.2,0.7]`;
-  - top beam `[0,4.13,0]`, half `[4.2,0.275,0.7]`.
-- The same pure AABB data feeds collision anchors and ring clearance.
-- Browser acceptance flew the Gate ring without crash, then separately collided with `archive gate left pier` and `archive gate top beam` through the real world collision path.
+`CLEAN LINE` is a transient run result, not a currency, saved score, Ring, Best, or Line bonus. The reducer requires, in order:
 
-### Deterministic room and route contract
+1. entering Approach;
+2. entering Commit;
+3. collecting the Commit ring;
+4. entering Recovery;
+5. exiting Recovery;
+6. no Archive Gate collider hit and no crash during the line.
 
-- Archive Gate canary seed: `1BADB00F`.
-- Accepted canary room: sequence/index `0`, then `9`, `18`, and so on.
-- `getArchiveGateSlot(seed) = floor(randomUnit(seed, 911) * 9)`. Selection depends only on run seed and room sequence, never Math.random, wall time, fetch order, or load completion time.
-- When the validated asset is unavailable, every sequence remains procedural.
-- The Gate passage target varies deterministically within `x = ±0.6`, `y = 1.9..2.7`; that aperture retains ring-radius clearance from both piers and the top beam.
-- The preceding six rooms converge toward the selected passage target using at most 70% of each PG-1 directional envelope per transition. Other rooms keep the existing non-monotonic fair-speed route behavior.
-- The Gate room places one ring at its AABB plane (`z=0`) and reuses the same PG-1 capture, score, and challenge contracts.
-- Integrated matrix: 48 seeds × 5 speed bands × 72 rooms, 18,288 rings and 1,920 Gate rooms. Every ring was AABB-clear, within its analytical directional cap, and inside the `0.82` capture radius after the existing 120 Hz reaction-aware `FlightDynamics` replay.
-- Same seed, room sequence, asset availability, input, and delta produce the same room archetypes, ring path, model state, and flight state. Restarting `1BADB00F` changes clone count only; it does not refetch/reparse or change the path.
+Repeated phase/ring events are idempotent. A collision or crash invalidates the attempt. Successful feedback lasts 2.6 simulation seconds, appears as a small lower-right HUD chip, and does not overlap the playfield center or mobile controls.
 
-## Preserved PG-1 contracts
+### Time, visibility, and resource lifetime
 
-The Archive Gate work did not retune flight, change input semantics, redefine Rings/Best, alter Page Visibility behavior, or change deployment ownership.
+- Encounter feedback and cue animation use explicit simulation delta/elapsed time.
+- `document.hidden` returns before flight/world/score/ring/collision/encounter ticks, so state and the 2.6-second result timer freeze while hidden.
+- Resume resets the frame clock, preventing delta spikes, teleporting, false collision, and false ring collection.
+- The accepted GLB is fetched and parsed once. Room clones share cached geometry/material resources; recycling does not dispose shared assets or refetch/reparse.
+- Cue geometry is created once per reserved world room and updated without per-frame cloning.
+- Any finite preload/hash/structure/parse failure selects the existing procedural fallback before the run begins. Fallback has no Gate-specific active state.
 
-### Seed
+## Preserved PG-1 and PG-A1 contracts
 
-- Authority: `src/game/simulation/RunSeed.ts`.
-- Unsigned 32-bit seed displayed as eight uppercase hexadecimal characters.
-- Resolution priority: `?seed=`, localStorage key `paper-glider-run-seed`, `crypto.getRandomValues`, fallback `50A6E123`.
-- Run-affecting randomness uses coordinate-addressed `randomUnit(seed, ...coordinates)`.
+- Start, pointer/touch/keyboard steering, wing tuck, double-click/double-tap deploy, ring collection, collision, game over, restart, desktop layout, and mobile layout remain intact.
+- Run seed is persisted as an unsigned 32-bit value and can be injected with `?seed=<hex-or-decimal>`. The same seed, input sequence, and explicit deltas reproduce the same run.
+- `FrameClock` clamps visible-frame deltas and resets on lifecycle boundaries.
+- `RingPath` uses the existing speed-aware reachability envelope and 0.82 capture margin.
+- Rings and Best remain ring counts. The pre-existing high-speed Line bonus remains separate and unchanged.
+- Loader URLs are still derived from `import.meta.env.BASE_URL`; preload remains finite at 5,000 ms.
 
-### Time and lifecycle
+## Acceptance evidence
 
-- Authority: `src/game/simulation/FrameClock.ts` and `PaperGliderGame.applyVisibilityState`.
-- Animation timestamps produce explicit seconds; visible frames clamp at `0.05s`.
-- Hidden state freezes flight, world, speed, score, collision/rings, crash coast, and animation elapsed.
-- Resume rebases the timestamp, produces a zero first tick, preserves mode/wing fold, and drops stale held gestures.
+### Unit and reachability
 
-### Fair-speed envelope and score
+- Vitest: 8 files, 35 tests passed.
+- PG-A2 encounter matrix: 48 seeds × 5 speed bands × 72 rooms.
+- Observed: 18,048 planned rings, 1,890 Commit Gates, 1,920 Approach rooms, and 1,880 Recovery rooms.
+- Every sampled ring was finite, clear of the manifest AABBs, and reachable under the 120 Hz `FlightDynamics` model with the 0.82 capture contract.
+- Existing PG-1 matrix remains green across 18,432 rings.
+- Tests cover same-seed replay, different-seed variation, ordered CLEAN LINE success, duplicate-event stability, collision/crash rejection, lifecycle timing, loader failures/fallback, AABBs, recycling, and shared-resource behavior.
 
-- Authority: `src/game/simulation/RingPath.ts` and unchanged `src/game/FlightTuning.ts`.
-- Travel time `t = longitudinalDistance / max(1, speed)`.
-- Reaction reserve `r = clamp(0.18t, 0.08, 0.18)`; control time `c = max(0.08, t-r)`.
-- Horizontal cap `min(3.4, 0.25 + 4.85c × 0.40)`.
-- Up cap `min(2.35, 0.22 + 3.25c × 0.36)`; down cap `min(2.3, 0.22 + 2.90c × 0.38)`.
-- Rings and Best remain collected-ring counts. Eligible high-speed challenge rings retain the separate Line bonus and Boost chain.
+### Browser and visual
 
-## Automated and browser acceptance
+- Full Chromium E2E: 32 enumerated cases; 27 passed and 5 intentional duplicate mobile-project skips.
+- Fixed visual slice: 16 enumerated cases; 12 passed and 4 intentional duplicate mobile-project skips.
+- Viewports: desktop `1280×720`; mobile portrait `390×844`.
+- New inspected baselines: desktop Approach, Recovery, and CLEAN LINE; mobile Approach and CLEAN LINE.
+- The recycled-Gate baseline changed intentionally because the complete encounter moves its next Commit from sequence 9 to sequence 13. Other unrelated baselines were not updated.
+- The CLEAN LINE functional test traverses the real phase/reducer flow. A visual-only development hook freezes the already-tested reducer result and normalizes deterministic world/camera animation; the production bundle exposes no debug API.
+- Local production preview on port 4180 loaded fixed seed `1BADB068`, returned manifest/GLB HTTP 200, had a healthy WebGL context, completed CLEAN LINE without game over, and recorded zero console/page errors. That preview was stopped after verification; the operator-owned 4173 preview was untouched.
 
-Final exact-main local validation used a fresh detached worktree at merge commit `68ff271` because an operator-owned preview on port 4173 held the primary checkout's Windows esbuild binary.
+### Build
 
-| Gate | Accepted evidence |
-| --- | --- |
-| Clean install | `npm ci`: 165 packages, 166 audited, 0 vulnerabilities |
-| Dependency tree | `npm ls --depth=0`: all direct dependencies valid, no missing/extraneous |
-| Typecheck | `npm run typecheck`: PASS |
-| Lint | `npm run lint`: PASS, zero warnings/errors |
-| Unit/integration | `npm run test`: 7 files, 28 tests, PASS |
-| Full schema and copied hashes | Draft-07 valid; all four public/docs copies match pinned SHA-256 |
-| PG-1 route matrix | 18,432 rings, PASS |
-| Archive Gate route matrix | 18,288 rings / 1,920 Gate rooms, PASS |
-| Production build | 21 modules, warning-free; generated `docs/` remained tracked-clean in a clean checkout |
-| Full Playwright | 24 enumerated, 20 passed, 4 intentional mobile-project skips, 2.8m exact-main local run |
-| Visual subset | 10 enumerated, 7 passed, 3 intentional mobile-project skips |
-| Production preview | manifest/GLB 200, playing, WebGL, 1280×720, debug API absent, console/page error 0 |
-| Git hygiene | worktree/branch diff/staged diff checks green; secret scan empty; Recipe absent |
-| Real CI | Run `29678210540`, all steps green in 4m12s |
-| Legacy Pages | Run `29678210043`, build/deploy/report green |
-
-Intentional Playwright skips are project-shape skips, not failures:
-
-- The five-second timeout proof runs once on desktop; mobile uses the same loader result contract.
-- Collider-debug, recycled-room, and procedural-fallback visual proofs run once on desktop.
-- The Archive Gate flight visual runs on both desktop `1280×720` and mobile portrait `390×844`.
-- Existing gameplay visuals remain accepted on both viewports and were not updated.
-
-New inspected visual baselines:
-
-- `archive-gate-flight.png` — desktop and mobile portrait;
-- `archive-gate-colliders.png` — manifest AABB overlay and ring aperture;
-- `archive-gate-recycled.png` — sequence 9 clone after full pool recycling;
-- `procedural-fallback.png` — playable fallback after manifest hash failure.
-
-## Public readback — 2026-07-19 JST
-
-Fixed-seed URL: https://yushimoji.github.io/paper-glider/?seed=1BADB00F
-
-- Document HTTP 200.
-- Current assets: `index-dJ5wGHek.js`, `three-core-jCUj419d.js`, `index-00WKB1l3.css`.
-- Manifest HTTP 200, 7,345 bytes.
-- GLB HTTP 200, 30,172 bytes.
-- Requests used the correct `/paper-glider/assets/workbench/paper-glider-v1/` subpath.
-- Start overlay displayed; click entered playing mode; WebGL context was healthy.
-- Archive Gate, both piers, top beam, route arch, and central ring were visibly present.
-- Neutral centered flight passed the opening, collected the Gate ring (`Rings 01`), and remained out of game-over.
-- Production debug API was absent.
-- Console errors: 0. Page errors: 0.
+- Vite 7.3.6 built 22 modules with no chunk-size warning.
+- Largest output remains Three core: 532.06 kB / 134.59 kB gzip.
+- Other accepted output sizes: HTML 1.04/0.59 kB, CSS 11.88/3.52 kB, Workbench loader 9.52/3.77 kB, GLTFLoader 44.82/13.23 kB, app 50.88/16.23 kB.
+- `docs/` is committed generated output and must match a clean build from the exact published source commit.
 
 ## Commit map
 
-Focused branch commits:
+Focused branch implementation commits:
 
 | Commit | Kind | Purpose |
 | --- | --- | --- |
-| `7dd4e26` | Asset/rights | Byte-identical GLB, manifest, schema, and scoped rights |
-| `6800e58` | Runtime | Loader, validation, finite preload, fallback, deterministic room/world/ring integration |
-| `c199d2a` | Tests/publication | Unit/E2E/visual/CI and generated `docs/` |
-| `71e0df3` | Build hygiene | Normalize generated chunk trailing whitespace |
-| `26b80fd` | Hash portability | Preserve pinned asset bytes across Windows checkouts |
-| `c919828` | Build reproducibility | Make clean checkout → build tracked-clean |
+| `f9f1ba7` | Planner/unit | Pure deterministic encounter planner, reducer, and matrix evidence |
+| `622b1b5` | World/runtime | Approach/Commit/Recovery rooms, cue geometry, ring plan, AABB and recycle integration |
+| `e252cd6` | UI/lifecycle | Visibility-safe CLEAN LINE result and game-state wiring |
+| `8e4220f` | Browser/visual | Full-flow Playwright coverage and inspected fixed baselines |
 
-Main integration:
-
-- `68ff271` — no-ff integration commit preserving the focused history.
-- A final docs-only successor updates this handoff and README; use live Git history for its commit ID.
-
-The focused branch remains on origin as a reviewable accepted artifact. No PR was created.
+The focused branch requires a final publication-candidate commit containing README, generated `docs/`, and this handoff. After every technical gate is green, integrate with a no-ff `main` commit. After public acceptance, use a separate docs-only commit for exact CI/Pages/readback evidence. No PR is required or authorized.
 
 ## Workbench non-mutation evidence
 
-Read-only Workbench path: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkbench`
+Read-only Workbench: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkbench`
 
-- Branch: `codex/paper-glider-compat-v1`.
-- HEAD: `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`.
-- Upstream branch HEAD: same value.
-- Worktree: clean at both start and closeout.
-- GLB, manifest, schema, RIGHTS, and Recipe SHA-256 values were unchanged.
-- No Workbench fetch, checkout, install, build, generation, file write, commit, or push occurred.
+- Start branch: `codex/paper-glider-compat-v1`.
+- Start HEAD/upstream: `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`, parity `0/0`.
+- Start worktree: clean.
+- No Workbench fetch, checkout, install, build, generation, file edit, commit, or push is authorized for PG-A2.
+- Recheck HEAD, parity, worktree, and Packet hashes at closeout before declaring non-mutation.
 
 ## Evidence boundaries and residual work
 
 | Purpose | Effect | Requirements | State | Owner | Next move |
 | --- | --- | --- | --- | --- | --- |
-| Physical touch acceptance | Confirms hold/double-tap comfort, OS gesture competition, safe areas, and orientation | Current iOS Safari and Android Chrome devices; human notes | Not tested; browser mobile emulation only | Human/operator | Run a named-device protocol before any physical-device claim |
-| Long-session maximum-speed fairness | Confirms the six-room Gate approach and ordinary routes remain readable/enjoyable over complete sessions | 15–30 minute human runs at fixed seeds and near-max tuck | Mathematical and browser automation green; human feel pending | Human play reviewer | Record seed, duration, rings, crashes, and subjective route readability |
-| Low-end performance | Protects fairness from frame stalls, thermals, memory pressure, and battery behavior | Named constrained/physical hardware and frame-time budget | Not measured | Performance lane + hardware owner | Measure p95/p99/stalls; do not infer from desktop bundle size |
-| Broader browsers | Finds Firefox/WebKit render/input/lifecycle differences | Pinned browser projects and triage | Chromium only | QA lane | Add non-visual smoke after the next gameplay slice, without changing Chromium baselines |
-| Primary-checkout clean install | Avoids stopping an operator-owned preview that holds Windows esbuild | Preview owner permission or isolated worktree | Clean install proven in isolated worktrees; primary `npm ls` valid | Next developer/operator | Prefer a fresh worktree while port 4173 preview exists; do not kill it implicitly |
+| Physical touch acceptance | Confirms hold/double-tap comfort, safe area, OS gesture competition, and orientation | Named current iOS Safari and Android Chrome devices with human notes | Not tested; mobile browser emulation only | Human/operator | Run named-device protocol before any device-complete claim |
+| Long-session game feel | Confirms cadence, anticipation, challenge, and CLEAN LINE satisfaction over full runs | 15–30 minute human runs across fixed and random seeds, including near-max tuck | Mathematical and browser automation green; human feel pending | Human play reviewer | Record seed, duration, Rings/Lines/CLEAN results, crashes, and qualitative notes |
+| Low-end performance | Detects frame stalls, thermal throttling, memory pressure, and battery effects | Named constrained/physical hardware and p95/p99 frame-time evidence | Not measured | Performance lane + hardware owner | Profile after the next visible room-set slice |
+| Firefox/WebKit | Detects renderer, input, and lifecycle differences | Pinned non-visual projects and triage | Chromium only | QA lane | Add smoke coverage without redefining Chromium visual authority |
+| Publication gate | Makes PG-A2 real for players | Clean exact-commit suite, focused/main push, actual CI, legacy Pages, public fixed-seed readback | Pending at this candidate checkpoint | Current developer | Complete gates in order; do not call PUBLISHED early |
 
-The local ignored `node_modules/`, test results, Playwright output, `.serena/`, and the pre-existing preview are not publication artifacts. Historical quarantined dependency directories outside the project were not touched and remain non-blocking.
+Ignored local dependencies, Playwright output, `.serena/`, the existing preview, and quarantined dependency directories outside the project are not publication artifacts and must not be deleted opportunistically.
 
 ## Farthest safe roadmap
 
-1. **PG-A2 — Archive Gate Flight Line:** turn the single archetype into a deterministic three-room approach/commit/recovery encounter with readable clean-pass feedback and a separate Gate Line result, while preserving Rings/Best and the PG-1 envelope.
-2. **PG-A3 — Room Set v1:** add one or two rights-cleared room archetypes through the same packet/loader contract and test memory/draw-call ceilings across mixed recycling.
-3. **PG-D1 — Device acceptance:** run physical iOS/Android touch, low-end frame, thermal, and endurance gates against the expanded public game.
-4. **PG-S1 — Session arc:** short local missions/medals and locally persisted paper styles; no backend/account dependency.
-5. **PG-RC — Release candidate:** broader browsers/devices, accessibility/audio/settings, privacy/copy review, and evidence-backed final balance.
+1. **PG-A2 publication closeout:** complete the exact-commit clean gate, focused/main pushes, actual CI, legacy Pages, public canary, and docs-only evidence commit.
+2. **PG-A3 — Room Set v1:** introduce one or two rights-cleared, mechanically distinct procedural room families without changing flight physics, then make them participate in deterministic routing, recycling, fairness, and visual regression.
+3. **PG-D1 — Device acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, constrained-device frame-time, thermal, and endurance evidence.
+4. **PG-S1 — Session arc:** local missions/medals and paper styles using existing Ring/Line/CLEAN outcomes; no backend/account dependency.
+5. **PG-RC — Release candidate:** accessibility, audio/settings, broader acceptance, copy/privacy, final human balance, and release evidence.
 
-Pages ownership stays `main:/docs` legacy unless a later, explicit publication decision changes it. Do not confuse validation CI with Pages deployment ownership.
+Pages ownership stays legacy `main:/docs` unless a later explicit publication decision changes it.
 
-## Restart commands
+## Restart and verification commands
 
 ```powershell
 git fetch --prune origin
@@ -236,77 +170,84 @@ git rev-list --left-right --count HEAD...origin/main
 git status --short --branch
 node --version
 npm --version
+npm ci
 npm ls --depth=0
 npm run typecheck
 npm run lint
 npm run test
 npm run build
 npm run test:e2e
+npm run test:visual
+git diff --check
+gh run list --branch main --limit 10
 gh api repos/YuShimoji/paper-glider/pages
 ```
 
-If `npm ci` in the primary checkout reports an EPERM lock on esbuild while the operator preview is still listening on 4173, do not stop that preview implicitly. Create a new detached worktree at the exact target commit, run `npm ci` and validation there, verify its resolved path, then remove only that worktree.
+If the primary checkout's `npm ci` would disturb the operator-owned process on 4173, create an exact-commit detached worktree under the verified project parent, run the clean gate there, and remove only that explicitly resolved worktree afterward.
 
 ## Next Prompt
 
 ```text
-Paper GliderのPG-A2「Archive Gate Flight Line」を、PROJECT_HANDOFF.mdに記録されたPUBLISHED_WITH_VERIFIED_ARCHIVE_GATE基準から連続する、実際に遊びが広がる縦切りスライスとして実装してください。診断基盤だけの作業へ戻らず、現在のArchive Gate実物、manifest AABB、決定seed、ring planner、flight、score、recyclingを使い、プレイヤーが見て理解し、狙って成功できる3-room encounterを公開版まで完成させてください。調査、設計、focused branch、実装、検証、visual evidence、commit/push、technical gate後のmain統合、実CI、legacy Pages、公開readback、PROJECT_HANDOFF.md更新まで、明示した停止条件に当たらない限り自走してください。
+Paper GliderのPG-A3「Deterministic Room Set v1」を、PROJECT_HANDOFF.mdに記録された公開済みPG-A2 Archive Gate Flight Lineから連続する、見た目と判断が実際に広がる縦切りスライスとして実装してください。小さなPrompt待ちへ分割せず、調査、権利確認、設計、focused branch、実装、検証、visual evidence、commit/push、technical gate後のmain統合、実CI、legacy Pages、公開readback、PROJECT_HANDOFF.md更新まで、停止条件に該当しない限り自走してください。
 
 正本と開始条件:
-- 最初にAGENTS.md、PROJECT_HANDOFF.md、README.md、package scripts、Vite/CI/Pages設定、Archive Gate loader/manifest/world/ring/testsを読む。
-- Paper Gliderのmain、HEAD、origin parity、worktreeをread-onlyで確認し、fetch後にcleanかつ0/0ならfocused branch `codex/archive-gate-flight-line-v1`を作る。
-- Workbenchは今回もread-only。既存packetを変更、再生成、checkout、install、build、commit、pushしない。
-- 既存4173 previewや他repository processを停止しない。npm操作は直列化し、必要ならexact HEADの新規一時worktreeでclean installを証明する。
-- fixed canaryはseed `1BADB00F`、Gate room sequence `0`/`9`。既存4 assetのpinned SHA-256とproject-scoped RIGHTSを維持する。
+- 最初に最寄りのAGENTS.md、PROJECT_HANDOFF.md、README.md、package scripts、Vite/CI/Pages設定、RoomArchetype、CorridorWorld、RingPath、ArchiveGateEncounter、loader、visual/E2E規約を読む。
+- `main`をread-onlyで確認し、fetch後にclean、`HEAD...origin/main=0/0`、PG-A2のpublic canaryがgreenならfocused branch `codex/deterministic-room-set-v1`を作る。未知のorigin advanceがあれば停止する。
+- Workbenchと既存Paper Glider Compatibility Packetはread-only。既存assetを変更・再生成・checkout・install・build・commit・pushしない。新規assetが必要なら、権利とPacketがリポジトリ内で既に承認済みのものだけを使用し、見つからなければ手続きや仮assetを発明せず、procedural geometryだけで完結する設計を選ぶ。
+- 既存4173 previewや他repository processを停止しない。npm操作は直列化し、clean installはexact HEADの新規一時worktreeで証明できる。
+
+目的:
+1. 通常飛行に少なくとも2種類の識別可能なroom familyを追加し、Archive Gate以外にも先読み、ライン選択、回避判断が生まれるようにする。
+2. 同一seed、asset availability、input、deltaからroom family、配置、ring path、collision、scoreを再現する。
+3. 各familyをPG-1の速度別0.82 capture contract、PG-A2のApproach/Commit/Recovery予約、九室recycling、visibility freeze、fallbackと共存させる。
+4. shared geometry/material、draw calls、clone/dispose、bundleサイズを測定し、ブラウザ公開に適した上限をコード近傍へ残す。
+5. desktop/mobileで新しい部屋の違いと安全な進路が見て理解できる公開版を完成させる。
 
 Active Artifact:
-- Archive Gateを単発objectではなく、決定論的な「approach room → gate commit room → recovery room」の3-room Flight Line encounterとしてプレイ可能にする。
-- approachでは次のGateが来ることをworld内の軽い視覚cueとring trajectoryで予告する。常設大型panelやゲーム画面を塞ぐ説明UIは追加しない。
-- commit roomではmanifest 3 AABBの中央通過を狙わせる。Gate ring、pier/top-beam collision、PG-1可到達性を維持する。
-- recoveryでは成功/失敗を短く読み取れるworld/HUD feedbackを出し、通常room cadenceへ自然に戻す。
-- clean passは「Gate Line」等の別結果として記録できるが、RingsとBestの意味を変えない。既存Line bonusとの関係を明文化し、二重加点や読みにくいscore体系を作らない。
-- 同一seed、asset availability、input、deltaでencounter位置、cue、ring path、結果が一致する。
-- procedural fallbackでも開始・通常flight・score・collision・recyclingが成立し、Gate専用stateがrunを壊さない。
+- procedural geometryを優先し、例えば「Shelf Slalom」と「Open Rafters」のようにシルエット、危険領域、推奨ラインが異なる2 familyを実装する。名称は実装時の視覚/遊びに合わせて確定してよい。
+- 一方を横方向の判断、もう一方を縦方向または予告タイミングの判断に使い、単なる色違いにしない。
+- ringはfamilyの安全経路を教えるが、常に中央固定せず、前ring・速度・到達可能性・manifest/procedural AABB clearanceから決める。
+- 障害物はpure plan dataから生成し、render mesh boundsやframe timingをcollision authorityにしない。
+- room familyの短いworld cueは許可するが、大型説明panel、常時tutorial、score体系追加は行わない。
+- PG-A2 Flight Lineの3 room予約中は新familyを混入させず、前後で通常cadenceへ決定論的に戻す。
 
-設計要件:
-- encounter cadenceはrun seedとroom sequenceのrandomUnit座標だけで決め、Math.random、wall time、fetch order、frame timingへ依存させない。
-- 現在の六室approach収束と0.82 capture contractを測定してから変更する。高速公平性を中央固定だけで達成しない。
-- Gate AABBはmanifest pure dataを唯一の正本にし、render mesh boundsからcolliderを生成しない。
-- cue/feedbackはloaded GLBのshared geometry/material lifetimeを壊さない。per-frame clone、再fetch、再parse、room recycle disposeを避ける。
-- `import.meta.env.BASE_URL`、5,000ms finite preload、hash/structure/schema validation、fallback、visibility freeze、explicit delta、現行flight tuning、入力、Rings/Best、Line bonusを維持する。
-- GitHub Pagesは引き続きlegacy `main:/docs`。Actions deploymentへ移行しない。
+維持契約:
+- 開始、pointer/touch/keyboard、翼格納、double-click/double-tap展開、Rings、Best、既存Line bonus、CLEAN LINE、collision、game over、restart、desktop/mobile layoutを維持する。
+- seed persistence/query replay、explicit delta、FrameClock、visibility pause/resume、5,000ms finite preload、`import.meta.env.BASE_URL`、hash/schema/structure validation、procedural fallbackを維持する。
+- Archive Gate colliderは既存manifest 3 AABBだけを正本とし、Packet、RIGHTS、pinned SHA-256、fetch=2/parse=1/shared resourcesを変えない。
+- GitHub Pagesはlegacy `main:/docs`のまま。CIとPages deploymentを混同しない。
 
 必須検証:
-- 新規clean checkoutでnpm ci、npm ls --depth=0、typecheck、lint、unit、build。
-- 同一seed replay、異なるseed variation、通常速/最高速近傍、多数seed/長room列で3-room encounterの可到達性とAABB clearance。
-- valid asset、全既存loader failure/fallback、visibility pause/resume、9-room recycling、fetch=2/parse=1、shared resources。
-- Playwright desktop 1280×720とmobile portrait 390×844で、予告cue、中央clean pass、pier collision、top-beam collision、success feedback、normal-room return、restart、fallbackを検証。
-- canary-specific visual baselineを原因確認・目視後に追加または更新する。既存PG-1/Archive Gate baselineを無関係に更新しない。
-- production previewと公開固定seed URLでmanifest/GLB 200、correct subpath、WebGL、encounter表示、clean pass、console/page error 0。
-- git diff --check、clean build reproducibility、staged review、secret scan、Recipe不在、Workbench無変更、focused/main parity、実CI、legacy Pages run。
+- exact commitの新規clean worktreeで`npm ci`、`npm ls --depth=0`、typecheck、lint、unit、build、E2E、visualを全て実行する。
+- 同一seed replay、異なるseed variation、48以上のseed、5以上の速度帯、少なくとも72 room/seedでfamily分布、ring reachability、AABB clearance、有限値、通常roomへの復帰をヘッドレス検証する。
+- PG-A2 fixed seed `1BADB068`でApproach→Commit→Recovery→CLEAN LINE、legacy seed fixture、Gate central pass/pier/top collision、recycling、all loader failures/fallback、visibility pause/resumeを回帰検証する。
+- desktop 1280×720とmobile 390×844で各新familyの予告、安全経路、衝突、通常cadence、Archive Gate共存をPlaywrightと固定visualで検証する。baselineは原因を目視確認してから更新し、無関係な画像は変えない。
+- production previewと公開版でWebGL、family出現、fixed Gate line、manifest/GLB 200、correct base path、console/page error 0を確認する。
+- generation/recycle後のgeometry/material数、draw call、memory/clone/dispose挙動、build chunkサイズを記録する。
+- `git diff --check`、clean build reproducibility、secret scan、Recipe不在、Packet/Workbench無変更、focused/main parity、実CI、legacy Pages sourceを確認する。
 
 禁止事項:
-- WorkbenchやRecipeを変更・配信しない。
-- Gate assetを一般open assetと記述しない。
-- technical green前にmainへ統合・公開しない。
-- flight tuning、score、seed、visibility、inputを証拠なしに作り直さない。
-- backend、login、leaderboard、telemetry、CDN、Actions Pages deploymentを追加しない。
-- 大規模UI再設計、無関係な依存更新、音・inventory・device diagnosticsをこのsliceへ混ぜない。
-- emulationをphysical-device acceptance、desktopをlow-end acceptance、人間未実施をlong-session acceptanceと呼ばない。
+- 外部API、backend、login、leaderboard、telemetry、CDN、Actions Pages deploymentを追加しない。
+- flight physics、入力、score、seed、visibility、Archive Gate state machineをPG-A3の都合で全面改築しない。
+- 高速公平性を全ring中央固定で達成しない。
+- rights不明asset、Recipe、Workbench-only dataをコピー・配信しない。
+- per-frame geometry/material clone、room recycle時のshared asset dispose、暗黙のMath.random、wall-clock依存を導入しない。
+- physical device、low-end、Firefox/WebKit、人間の長時間感触を未確認のままpassまたはproduction-completeと報告しない。
+- technical green前にmainへ統合せず、PR/tag/releaseを標準成果物にしない。
 
 停止条件:
-- 正本との契約矛盾、権利範囲外のasset変更、Pages方式変更が不可避、現行主要挙動を維持できない設計衝突、認証/秘密/owner判断が必要、またはorigin/mainに未知のadvanceがある場合。
-- 通常のtest failureや実装bugは停止条件ではない。原因修正と再検証を継続する。
+- 正本との矛盾、権利範囲外assetが不可欠、Pages方式変更が不可避、現行主要挙動を維持できない設計衝突、認証/秘密/owner判断が必要、またはorigin/mainに未知のadvanceがある場合。
+- 通常のtest failureや実装bugは停止条件ではない。原因調査、修正、再検証を継続する。
 
 完了報告:
-- 結論を先頭にPUBLISHED / READY / CONDITIONAL / BLOCKEDのいずれかで示す。
+- 結論を先頭にPUBLISHED / READY / CONDITIONAL / BLOCKEDで示す。
 - 開始/終了branch、HEAD、parity、worktree、全commit、focused/main pushを示す。
-- 3-room encounter、cadence、cue、Gate Line規則、determinism、fallback、resource lifetimeを説明する。
-- clean install、unit件数、ring/encounter matrix件数、E2E/visual件数、production preview、CI URL、legacy Pages URL、固定seed公開URLを示す。
-- rights permission、technical acceptance、自動確認、physical-device/low-end/human未確認を分離する。
-- PROJECT_HANDOFF.mdを次端末が単独再開できる正本へ更新し、最後にPG-A3または次の最重要な見た目/遊び拡張を実行する完全な単一Promptを残す。
+- room familyの見た目、判断、cadence、pure plan、collision、fairness、resource budget、PG-A2共存を説明する。
+- clean install、unit件数、seed/速度/room matrix、E2E/visual件数、production preview、CI URL、legacy Pages URL、公開readbackを示す。
+- rights、technical acceptance、自動確認、physical-device/low-end/non-Chromium/human未確認を分離する。
+- PROJECT_HANDOFF.mdを単独再開可能な正本へ更新し、最後にPG-D1または次の最重要スライスを実行する完全な単一Promptを残す。
 ```
 
 ## Handoff rule
 
-Update this file whenever the development axis, accepted artifact, evidence boundary, deployment contract, or recommended next mission changes. Do not leave decisive restart state only in chat.
+Update this file whenever the accepted artifact, evidence boundary, publication state, or next mission changes. Never leave decisive restart state only in chat.
