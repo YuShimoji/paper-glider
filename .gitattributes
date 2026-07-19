@@ -1,2 +1,6 @@
 /public/assets/workbench/paper-glider-v1/* -text
 /docs/assets/workbench/paper-glider-v1/* -text
+/index.html text eol=lf
+/docs/index.html -text
+/docs/assets/*.js -text
+/docs/assets/*.css -text
