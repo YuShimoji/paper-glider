@@ -1,4 +1,5 @@
 import { flightTuning } from '../FlightTuning';
+import type { ArchiveGateEncounterPhase } from './ArchiveGateEncounter';
 import { randomUnit } from './RunSeed';
 
 export const ROOM_LENGTH = 18;
@@ -48,6 +49,8 @@ export interface PlannedRing {
   effort: number;
   challengeBonus: number;
   envelope: ReachabilityEnvelope;
+  encounterPhase: ArchiveGateEncounterPhase;
+  encounterCommitSequence: number | null;
 }
 
 export interface RoomContentPlan {
@@ -58,12 +61,16 @@ export interface RoomContentPlan {
   obstacles: ObstaclePlan[];
   clearanceVolumes: readonly ObstacleVolumePlan[];
   rings: PlannedRing[];
+  encounterPhase: ArchiveGateEncounterPhase;
+  encounterCommitSequence: number | null;
 }
 
 export interface RoomPlanningOptions {
   readonly archetype?: 'procedural' | 'archive-gate';
   readonly clearanceVolumes?: readonly ObstacleVolumePlan[];
   readonly passageTarget?: Readonly<{ x: number; y: number }> | null;
+  readonly encounterPhase?: ArchiveGateEncounterPhase;
+  readonly encounterCommitSequence?: number | null;
 }
 
 interface PathPoint {
@@ -227,14 +234,25 @@ export class RingPathPlanner {
   planRoom(sequence: number, speed: number, options: RoomPlanningOptions = {}): RoomContentPlan {
     const pattern = sequence % 6;
     const archetype = options.archetype ?? 'procedural';
-    const obstacles = archetype === 'procedural' ? getObstacles(pattern) : [];
+    const encounterPhase = options.encounterPhase ?? 'none';
+    const encounterCommitSequence = options.encounterCommitSequence ?? null;
+    const reservedFlightLineRoom = encounterPhase !== 'none';
+    const obstacles = archetype === 'procedural' && !reservedFlightLineRoom ? getObstacles(pattern) : [];
     const clearanceVolumes = options.clearanceVolumes ?? obstacles.map(toObstacleVolume);
-    const ringCount = archetype === 'archive-gate' ? 1 : pattern === 5 && speed < 18 ? 2 : 1;
+    const ringCount = archetype === 'archive-gate' || reservedFlightLineRoom
+      ? 1
+      : pattern === 5 && speed < 18
+        ? 2
+        : 1;
     const rings: PlannedRing[] = [];
 
     for (let index = 0; index < ringCount; index += 1) {
-      const z = archetype === 'archive-gate'
-        ? 0
+      const z = encounterPhase === 'approach'
+        ? -2.8
+        : encounterPhase === 'commit'
+          ? 0
+          : encounterPhase === 'recovery'
+            ? 3.6
         : ringCount === 2
           ? (index === 0 ? 2.2 : -4.4)
           : chooseRingZ(this.seed, sequence, index, clearanceVolumes);
@@ -273,11 +291,23 @@ export class RingPathPlanner {
         effort,
         challengeBonus,
         envelope,
+        encounterPhase,
+        encounterCommitSequence,
       };
       rings.push(ring);
       this.previous = ring;
     }
 
-    return { sequence, pattern, speed, archetype, obstacles, clearanceVolumes, rings };
+    return {
+      sequence,
+      pattern,
+      speed,
+      archetype,
+      obstacles,
+      clearanceVolumes,
+      rings,
+      encounterPhase,
+      encounterCommitSequence,
+    };
   }
 }
