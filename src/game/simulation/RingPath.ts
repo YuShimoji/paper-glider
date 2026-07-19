@@ -17,6 +17,17 @@ export interface ObstaclePlan {
   z: number;
 }
 
+export interface ObstacleVolumePlan {
+  readonly id: string;
+  readonly label: string;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly halfX: number;
+  readonly halfY: number;
+  readonly halfZ: number;
+}
+
 export interface ReachabilityEnvelope {
   longitudinalDistance: number;
   travelTime: number;
@@ -43,8 +54,16 @@ export interface RoomContentPlan {
   sequence: number;
   pattern: number;
   speed: number;
+  archetype: 'procedural' | 'archive-gate';
   obstacles: ObstaclePlan[];
+  clearanceVolumes: readonly ObstacleVolumePlan[];
   rings: PlannedRing[];
+}
+
+export interface RoomPlanningOptions {
+  readonly archetype?: 'procedural' | 'archive-gate';
+  readonly clearanceVolumes?: readonly ObstacleVolumePlan[];
+  readonly passageTarget?: Readonly<{ x: number; y: number }> | null;
 }
 
 interface PathPoint {
@@ -53,16 +72,7 @@ interface PathPoint {
   courseDistance: number;
 }
 
-interface ObstacleVolume {
-  x: number;
-  y: number;
-  z: number;
-  halfX: number;
-  halfY: number;
-  halfZ: number;
-}
-
-const obstacleDimensions: Record<ObstacleKind, Omit<ObstacleVolume, 'x' | 'z'>> = {
+const obstacleDimensions: Record<ObstacleKind, Omit<ObstacleVolumePlan, 'id' | 'label' | 'x' | 'z'>> = {
   bookcase: { y: 1.08, halfX: 0.64, halfY: 1.75, halfZ: 0.65 },
   plant: { y: 0.37, halfX: 0.68, halfY: 1.25, halfZ: 0.68 },
   desk: { y: 0.25, halfX: 1.52, halfY: 0.92, halfZ: 0.72 },
@@ -92,8 +102,14 @@ function getObstacles(pattern: number): ObstaclePlan[] {
   }
 }
 
-function toObstacleVolume(obstacle: ObstaclePlan): ObstacleVolume {
-  return { ...obstacleDimensions[obstacle.kind], x: obstacle.x, z: obstacle.z };
+function toObstacleVolume(obstacle: ObstaclePlan, index: number): ObstacleVolumePlan {
+  return {
+    ...obstacleDimensions[obstacle.kind],
+    id: `procedural-${index}-${obstacle.kind}`,
+    label: obstacle.kind,
+    x: obstacle.x,
+    z: obstacle.z,
+  };
 }
 
 export function calculateReachabilityEnvelope(
@@ -122,8 +138,14 @@ export function isRingClearOfObstacles(
   ring: Pick<PlannedRing, 'x' | 'y' | 'z'>,
   obstacles: ObstaclePlan[],
 ): boolean {
-  return obstacles.every((obstacle) => {
-    const volume = toObstacleVolume(obstacle);
+  return isRingClearOfVolumes(ring, obstacles.map(toObstacleVolume));
+}
+
+export function isRingClearOfVolumes(
+  ring: Pick<PlannedRing, 'x' | 'y' | 'z'>,
+  volumes: readonly ObstacleVolumePlan[],
+): boolean {
+  return volumes.every((volume) => {
     if (Math.abs(ring.z - volume.z) > volume.halfZ + 1.15) return true;
     return (
       Math.abs(ring.x - volume.x) > volume.halfX + 0.68 ||
@@ -132,18 +154,40 @@ export function isRingClearOfObstacles(
   });
 }
 
-function chooseRingZ(seed: number, sequence: number, index: number, obstacles: ObstaclePlan[]): number {
+function chooseRingZ(
+  seed: number,
+  sequence: number,
+  index: number,
+  volumes: readonly ObstacleVolumePlan[],
+): number {
   const candidates = [-5.2, -2.8, 0, 2.8, 5.2];
   const offset = Math.floor(randomUnit(seed, sequence, index, 41) * candidates.length);
   for (let attempt = 0; attempt < candidates.length; attempt += 1) {
     const candidate = candidates[(offset + attempt * 2) % candidates.length];
-    const hasDepthClearance = obstacles.every((obstacle) => {
-      const halfZ = obstacleDimensions[obstacle.kind].halfZ;
-      return Math.abs(candidate - obstacle.z) > halfZ + 1.15;
+    const hasDepthClearance = volumes.every((volume) => {
+      return Math.abs(candidate - volume.z) > volume.halfZ + 1.15;
     });
     if (hasDepthClearance) return candidate;
   }
   return candidates[offset];
+}
+
+function targetPoint(
+  previous: PathPoint,
+  target: Readonly<{ x: number; y: number }>,
+  envelope: ReachabilityEnvelope,
+): { x: number; y: number; effort: number } {
+  const deltaX = clamp(target.x - previous.x, -envelope.maximumDeltaX * 0.7, envelope.maximumDeltaX * 0.7);
+  const verticalLimit = target.y >= previous.y ? envelope.maximumDeltaUp : envelope.maximumDeltaDown;
+  const deltaY = clamp(target.y - previous.y, -verticalLimit * 0.7, verticalLimit * 0.7);
+  return {
+    x: clamp(previous.x + deltaX, -PATH_X_LIMIT, PATH_X_LIMIT),
+    y: clamp(previous.y + deltaY, PATH_Y_MIN, PATH_Y_MAX),
+    effort: Math.max(
+      Math.abs(deltaX) / Math.max(0.001, envelope.maximumDeltaX),
+      Math.abs(deltaY) / Math.max(0.001, verticalLimit),
+    ),
+  };
 }
 
 function candidatePoint(
@@ -180,25 +224,35 @@ export class RingPathPlanner {
     this.previous = { x: 0, y: 2.35, courseDistance: -14.62 };
   }
 
-  planRoom(sequence: number, speed: number): RoomContentPlan {
+  planRoom(sequence: number, speed: number, options: RoomPlanningOptions = {}): RoomContentPlan {
     const pattern = sequence % 6;
-    const obstacles = getObstacles(pattern);
-    const ringCount = pattern === 5 && speed < 18 ? 2 : 1;
+    const archetype = options.archetype ?? 'procedural';
+    const obstacles = archetype === 'procedural' ? getObstacles(pattern) : [];
+    const clearanceVolumes = options.clearanceVolumes ?? obstacles.map(toObstacleVolume);
+    const ringCount = archetype === 'archive-gate' ? 1 : pattern === 5 && speed < 18 ? 2 : 1;
     const rings: PlannedRing[] = [];
 
     for (let index = 0; index < ringCount; index += 1) {
-      const z = ringCount === 2 ? (index === 0 ? 2.2 : -4.4) : chooseRingZ(this.seed, sequence, index, obstacles);
+      const z = archetype === 'archive-gate'
+        ? 0
+        : ringCount === 2
+          ? (index === 0 ? 2.2 : -4.4)
+          : chooseRingZ(this.seed, sequence, index, clearanceVolumes);
       const courseDistance = sequence * ROOM_LENGTH - z;
       const longitudinalDistance = Math.max(4, courseDistance - this.previous.courseDistance);
       const envelope = calculateReachabilityEnvelope(speed, longitudinalDistance);
-      let selected = candidatePoint(this.seed, sequence, index, 0, this.previous, envelope);
+      let selected = options.passageTarget
+        ? targetPoint(this.previous, options.passageTarget, envelope)
+        : candidatePoint(this.seed, sequence, index, 0, this.previous, envelope);
 
-      for (let attempt = 0; attempt < 24; attempt += 1) {
-        const candidate = candidatePoint(this.seed, sequence, index, attempt, this.previous, envelope);
-        const provisional = { x: candidate.x, y: candidate.y, z };
-        if (isRingClearOfObstacles(provisional, obstacles)) {
-          selected = candidate;
-          break;
+      if (!isRingClearOfVolumes({ ...selected, z }, clearanceVolumes)) {
+        for (let attempt = 0; attempt < 24; attempt += 1) {
+          const candidate = candidatePoint(this.seed, sequence, index, attempt, this.previous, envelope);
+          const provisional = { x: candidate.x, y: candidate.y, z };
+          if (isRingClearOfVolumes(provisional, clearanceVolumes)) {
+            selected = candidate;
+            break;
+          }
         }
       }
 
@@ -224,6 +278,6 @@ export class RingPathPlanner {
       this.previous = ring;
     }
 
-    return { sequence, pattern, speed, obstacles, rings };
+    return { sequence, pattern, speed, archetype, obstacles, clearanceVolumes, rings };
   }
 }

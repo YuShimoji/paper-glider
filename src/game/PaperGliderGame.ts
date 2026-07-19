@@ -41,6 +41,8 @@ import {
   RUN_SEED_STORAGE_KEY,
 } from './simulation/RunSeed';
 import type { RunSeedSource, SeedStorage } from './simulation/RunSeed';
+import type { WorkbenchAssetLoadResult } from './assets/WorkbenchRoomAssetLoader';
+import type { RoomDiagnostic } from './CorridorWorld';
 
 interface DebugSnapshot extends GameSnapshot {
   player: { x: number; y: number; velocityX: number; velocityY: number; lift: number };
@@ -57,6 +59,14 @@ interface DebugSnapshot extends GameSnapshot {
   visibilityPaused: boolean;
   elapsed: number;
   lastDeltaSeconds: number;
+  asset: {
+    status: 'loaded' | 'procedural-fallback';
+    failureCode: string | null;
+    fetchCount: number;
+    parseCount: number;
+    cloneCount: number;
+  };
+  rooms: readonly RoomDiagnostic[];
 }
 
 interface GliderRig {
@@ -75,6 +85,10 @@ declare global {
       restartWithSeed: (seed: string | number) => boolean;
       setVisibilityForTest: (hidden: boolean) => void;
       prepareVisualForTest: () => void;
+      setFlightStateForTest: (x: number, y: number) => void;
+      setColliderDebugVisible: (visible: boolean) => void;
+      advanceRoomsForTest: (distance: number) => void;
+      setRoomPositionForTest: (sequence: number, z: number) => boolean;
     };
   }
 }
@@ -116,6 +130,7 @@ export class PaperGliderGame {
   private seedSource: RunSeedSource;
   private visibilityPaused = false;
   private contextLost = false;
+  private readonly assetLoadResult: WorkbenchAssetLoadResult;
 
   private readonly startOverlay: HTMLElement;
   private readonly gameoverOverlay: HTMLElement;
@@ -139,8 +154,9 @@ export class PaperGliderGame {
   private readonly resultBonus: HTMLElement;
   private readonly runSeedLabels: HTMLElement[];
 
-  constructor(root: HTMLDivElement) {
+  constructor(root: HTMLDivElement, assetLoadResult: WorkbenchAssetLoadResult) {
     this.root = root;
+    this.assetLoadResult = assetLoadResult;
     this.root.innerHTML = this.createMarkup();
     const resolvedSeed = resolveRunSeed(
       window.location.search,
@@ -197,7 +213,12 @@ export class PaperGliderGame {
     this.leftWing = gliderRig.leftWing;
     this.rightWing = gliderRig.rightWing;
     this.scene.add(this.glider);
-    this.world = new CorridorWorld(this.scene, paperTexture, this.runSeed);
+    this.world = new CorridorWorld(
+      this.scene,
+      paperTexture,
+      this.runSeed,
+      assetLoadResult.ok ? assetLoadResult.library : null,
+    );
     this.world.reset(this.runSeed);
 
     const dustSystem = this.createDust();
@@ -601,6 +622,9 @@ export class PaperGliderGame {
       getSnapshot: () => {
         const nextRing = this.world.getNextRing(this.nextRingScratch);
         const flight = this.dynamics.getSnapshot();
+        const assetMetrics = this.assetLoadResult.ok
+          ? this.assetLoadResult.library.getMetrics()
+          : { fetchCount: 0, parseCount: 0, cloneCount: 0 };
         return {
           ...this.model.getSnapshot(),
           player: {
@@ -625,6 +649,12 @@ export class PaperGliderGame {
           visibilityPaused: this.visibilityPaused,
           elapsed: this.elapsed,
           lastDeltaSeconds: this.clock.getLastDeltaSeconds(),
+          asset: {
+            status: this.assetLoadResult.ok ? 'loaded' : 'procedural-fallback',
+            failureCode: this.assetLoadResult.ok ? null : this.assetLoadResult.failure.code,
+            ...assetMetrics,
+          },
+          rooms: this.world.getRoomDiagnostics(),
         };
       },
       aimAtNextRing: () => {
@@ -640,6 +670,14 @@ export class PaperGliderGame {
         this.startRun();
         this.applyVisibilityState(true);
       },
+      setFlightStateForTest: (x, y) => {
+        this.dynamics.reset({ x, y });
+        this.input.setWorldTarget(x, y);
+        this.glider.position.set(x, y, 0.62);
+      },
+      setColliderDebugVisible: (visible) => this.world.setColliderDebugVisible(visible),
+      advanceRoomsForTest: (distance) => this.world.advanceDistanceForTest(distance),
+      setRoomPositionForTest: (sequence, z) => this.world.setRoomPositionForTest(sequence, z),
     };
   }
 
