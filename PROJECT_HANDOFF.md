@@ -4,11 +4,11 @@ This is the durable restart and supervising-AI entrypoint. Read it with `README.
 
 ## Current conclusion
 
-**READY_FOR_ARCHIVE_GATE_FLIGHT_LINE_PUBLICATION**
+**CONDITIONAL**
 
-PG-A2 implements a deterministic, playable Archive Gate Flight Line as three consecutive rooms: Approach, Gate Commit, and Recovery. The fixed canary, unit matrix, Chromium E2E, fixed desktop/mobile visuals, and local production preview are green on the focused branch. Publication remains gated on a clean exact-commit validation, focused-branch push, no-ff integration to `main`, the actual GitHub Actions run, legacy Pages completion, and public fixed-seed readback.
+PG-A2 implements a deterministic, playable Archive Gate Flight Line as three consecutive rooms: Approach, Gate Commit, and Recovery. Focused branch and `main` exact-commit clean installs, unit/reachability, Chromium E2E, fixed desktop/mobile visuals, build reproducibility, and local production preview are green. The focused branch and no-ff `main` integration are pushed with parity `0/0`.
 
-After those gates pass, this conclusion must be changed to `PUBLISHED_WITH_ARCHIVE_GATE_FLIGHT_LINE` and the exact run/commit evidence added. This is a technical/browser result only; physical-phone touch, low-end hardware, Firefox/WebKit, and long-session human feel remain unverified.
+Publication acceptance is conditional only because a critical GitHub Actions service incident left the actual CI and legacy Pages jobs queued and intermittently made their APIs return HTTP 503/504. The source requires no known fix. Do not call this `PUBLISHED_WITH_ARCHIVE_GATE_FLIGHT_LINE` until those exact jobs (or explicit post-incident reruns) pass and the public fixed-seed game completes Approach → Commit → Recovery → CLEAN LINE with zero console/page errors. Physical-phone touch, low-end hardware, Firefox/WebKit, and long-session human feel remain separately unverified.
 
 ## Repository and publication state
 
@@ -16,7 +16,8 @@ After those gates pass, this conclusion must be changed to `PUBLISHED_WITH_ARCHI
 - Public game: https://yushimoji.github.io/paper-glider/
 - PG-A2 fixed run: https://yushimoji.github.io/paper-glider/?seed=1BADB068
 - Starting baseline: `main` at `fa57859ca5ecb20328fdc50c77c626b1f00a05fd`, `HEAD...origin/main = 0/0`, clean.
-- Focused branch: `codex/archive-gate-flight-line-a2`; use live Git for its final accepted HEAD.
+- Focused branch: `codex/archive-gate-flight-line-a2` at `78732897df4638e27f15a16c2bad8e2232888c74`, pushed, parity `0/0`.
+- Main integration: `7652ec1d9ceeb5e0856c4d5bd9a0ce4a1cd22e8f` (`Merge Archive Gate Flight Line`), pushed, parity `0/0` before this conditional docs-only successor.
 - Publication source must remain GitHub Pages legacy `main:/docs`. Validation CI does not deploy Pages.
 - No PR, tag, release, backend, login, leaderboard, telemetry, CDN, or Actions Pages deployment is part of PG-A2.
 - An operator-owned preview was already listening on port 4173 at start and was not stopped or changed.
@@ -114,6 +115,20 @@ Repeated phase/ring events are idempotent. A collision or crash invalidates the 
 - Largest output remains Three core: 532.06 kB / 134.59 kB gzip.
 - Other accepted output sizes: HTML 1.04/0.59 kB, CSS 11.88/3.52 kB, Workbench loader 9.52/3.77 kB, GLTFLoader 44.82/13.23 kB, app 50.88/16.23 kB.
 - `docs/` is committed generated output and must match a clean build from the exact published source commit.
+- Focused commit `7873289` and merge commit `7652ec1` were each validated in a newly created detached worktree with `npm ci`, `npm ls --depth=0`, typecheck, lint, 35 unit tests, build, 27-pass full E2E, 12-pass visual-only suite, `git diff --check`, and post-build tracked-clean state.
+- The first attempted focused-worktree `npm ci` accidentally retained the primary checkout as its shell working directory and hit the known esbuild EPERM held by the operator preview. No process was stopped. Primary dependencies were immediately repaired with `npm install`; `npm ls --depth=0`, zero-vulnerability audit, same PID 23548 listener, HTTP 200 preview, and clean Git state were re-established before publication work continued.
+
+### External CI and Pages blocker — 2026-07-20 JST
+
+- CI: https://github.com/YuShimoji/paper-glider/actions/runs/29708293269 — created for `7652ec1`; queued, not passed.
+- Legacy Pages: https://github.com/YuShimoji/paper-glider/actions/runs/29708292830 — created for `7652ec1`; queued, not passed.
+- Official incident: https://stspg.io/w8d77c7t94zf — `Incident with GitHub Actions`, critical impact, investigating during two bounded recovery windows.
+- GitHub stated that new workflows could be delayed or fail to start. Run/workflow API reads repeatedly returned HTTP 503 and 504, matching the official incident.
+- Pages API before the incident still reported `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`. This proves the publication contract, not PG-A2 deployment completion.
+- Blocking contract: actual GitHub Actions CI success, actual legacy Pages success, and public fixed-seed readback.
+- Owner: GitHub Actions service until recovery; then the next Paper Glider developer performs readback and evidence closeout.
+- Target source file/minimum fix: none. Do not edit `.github/workflows/ci.yml`, `docs/`, gameplay, or Pages settings to work around the outage.
+- Minimum next move: wait for the official incident to clear; inspect the two existing runs; rerun only a job that the incident explicitly leaves failed/cancelled; then complete public readback and a final docs-only handoff commit.
 
 ## Commit map
 
@@ -125,18 +140,19 @@ Focused branch implementation commits:
 | `622b1b5` | World/runtime | Approach/Commit/Recovery rooms, cue geometry, ring plan, AABB and recycle integration |
 | `e252cd6` | UI/lifecycle | Visibility-safe CLEAN LINE result and game-state wiring |
 | `8e4220f` | Browser/visual | Full-flow Playwright coverage and inspected fixed baselines |
+| `7873289` | Publication candidate | README, committed reproducible `docs/`, and standalone PG-A2 handoff |
 
-The focused branch requires a final publication-candidate commit containing README, generated `docs/`, and this handoff. After every technical gate is green, integrate with a no-ff `main` commit. After public acceptance, use a separate docs-only commit for exact CI/Pages/readback evidence. No PR is required or authorized.
+Main integration is `7652ec1`, a no-ff merge whose tree exactly matches focused commit `7873289`. This conditional docs-only successor records the external outage; use live Git for its final ID. After public acceptance, use one final docs-only commit for exact CI/Pages/readback evidence. No PR, tag, or release was created.
 
 ## Workbench non-mutation evidence
 
 Read-only Workbench: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkbench`
 
-- Start branch: `codex/paper-glider-compat-v1`.
-- Start HEAD/upstream: `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`, parity `0/0`.
-- Start worktree: clean.
+- Start/end branch: `codex/paper-glider-compat-v1`.
+- Start/end HEAD/upstream: `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`, parity `0/0`.
+- Start/end worktree: clean.
+- Workbench GLB, manifest, schema, and RIGHTS hashes still match the four pinned values above.
 - No Workbench fetch, checkout, install, build, generation, file edit, commit, or push is authorized for PG-A2.
-- Recheck HEAD, parity, worktree, and Packet hashes at closeout before declaring non-mutation.
 
 ## Evidence boundaries and residual work
 
@@ -146,13 +162,13 @@ Read-only Workbench: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkben
 | Long-session game feel | Confirms cadence, anticipation, challenge, and CLEAN LINE satisfaction over full runs | 15–30 minute human runs across fixed and random seeds, including near-max tuck | Mathematical and browser automation green; human feel pending | Human play reviewer | Record seed, duration, Rings/Lines/CLEAN results, crashes, and qualitative notes |
 | Low-end performance | Detects frame stalls, thermal throttling, memory pressure, and battery effects | Named constrained/physical hardware and p95/p99 frame-time evidence | Not measured | Performance lane + hardware owner | Profile after the next visible room-set slice |
 | Firefox/WebKit | Detects renderer, input, and lifecycle differences | Pinned non-visual projects and triage | Chromium only | QA lane | Add smoke coverage without redefining Chromium visual authority |
-| Publication gate | Makes PG-A2 real for players | Clean exact-commit suite, focused/main push, actual CI, legacy Pages, public fixed-seed readback | Pending at this candidate checkpoint | Current developer | Complete gates in order; do not call PUBLISHED early |
+| Publication gate | Makes PG-A2 real for players | Actual CI, legacy Pages, public fixed-seed readback | Conditional: source/main green and pushed; GitHub Actions critical incident kept jobs queued/API 503/504 | GitHub Actions service, then next developer | Wait for recovery; verify/rerun exact jobs; read back public canary; do not call PUBLISHED early |
 
 Ignored local dependencies, Playwright output, `.serena/`, the existing preview, and quarantined dependency directories outside the project are not publication artifacts and must not be deleted opportunistically.
 
 ## Farthest safe roadmap
 
-1. **PG-A2 publication closeout:** complete the exact-commit clean gate, focused/main pushes, actual CI, legacy Pages, public canary, and docs-only evidence commit.
+1. **PG-A2 publication closeout:** after GitHub Actions recovery, complete the existing actual CI/Pages jobs, public canary, and final docs-only evidence commit. No gameplay reimplementation is needed.
 2. **PG-A3 — Room Set v1:** introduce one or two rights-cleared, mechanically distinct procedural room families without changing flight physics, then make them participate in deterministic routing, recycling, fairness, and visual regression.
 3. **PG-D1 — Device acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, constrained-device frame-time, thermal, and endurance evidence.
 4. **PG-S1 — Session arc:** local missions/medals and paper styles using existing Ring/Line/CLEAN outcomes; no backend/account dependency.
@@ -180,10 +196,20 @@ npm run test:e2e
 npm run test:visual
 git diff --check
 gh run list --branch main --limit 10
+gh run view 29708293269 --json status,conclusion,jobs,url,headSha
+gh run view 29708292830 --json status,conclusion,jobs,url,headSha
 gh api repos/YuShimoji/paper-glider/pages
 ```
 
 If the primary checkout's `npm ci` would disturb the operator-owned process on 4173, create an exact-commit detached worktree under the verified project parent, run the clean gate there, and remove only that explicitly resolved worktree afterward.
+
+After the official incident clears:
+
+1. If both recorded runs complete successfully, do not rerun them.
+2. If CI was cancelled/failed only because of the incident, run `gh run rerun 29708293269 --failed` and wait for success.
+3. If the legacy Pages run did not recover, request one legacy build with `gh api --method POST repos/YuShimoji/paper-glider/pages/builds`; do not switch deployment modes.
+4. Reconfirm `build_type=legacy`, `source=main:/docs`, then use the fixed public URL and browser automation to observe all three phases, CLEAN LINE, manifest/GLB HTTP 200, correct `/paper-glider/` subpath, healthy WebGL, production debug API absence, game-over false, and zero console/page errors.
+5. Change the conclusion to `PUBLISHED_WITH_ARCHIVE_GATE_FLIGHT_LINE`, record exact successful run/public evidence, make one docs-only commit, push it, and verify its successor CI/Pages jobs.
 
 ## Next Prompt
 
