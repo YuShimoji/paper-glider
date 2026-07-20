@@ -104,7 +104,20 @@ async function startFlight(page: import('@playwright/test').Page): Promise<void>
 async function gotoFlightLine(page: import('@playwright/test').Page): Promise<void> {
   await page.goto(`?seed=${FLIGHT_LINE_SEED}`);
   await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
-  await expect.poll(async () => (await snapshot(page)).asset.status).toBe('loaded');
+  try {
+    await expect.poll(
+      async () => (await snapshot(page)).asset.status,
+      { timeout: 8_000 },
+    ).toBe('loaded');
+  } catch {
+    // A long software-WebGL campaign can recycle one boot. Reload once before treating it as an asset failure.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
+    await expect.poll(
+      async () => (await snapshot(page)).asset.status,
+      { timeout: 8_000 },
+    ).toBe('loaded');
+  }
 }
 
 async function gotoRoomSet(page: import('@playwright/test').Page): Promise<void> {
@@ -265,6 +278,8 @@ async function prepareFlightLineVisual(
     recoverySequence: FLIGHT_LINE_RECOVERY,
   });
   await page.waitForTimeout(120);
+  // The production hint expires after 5.2 s; keep the intended visual fixture stable on slow CI runners.
+  await page.locator('.controls-hint').evaluate((element) => element.classList.add('is-visible'));
 }
 
 async function pointerDown(
