@@ -914,14 +914,23 @@ test('@visual Flight Book start panel and locked default collection', async ({ p
 test('@visual Flight Book one-line running progress', async ({ page }) => {
   const errors = collectRuntimeErrors(page);
   await startFlight(page);
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const debug = window.__paperGliderDebug;
     if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(true);
+    debug.restartWithSeed('1BADB002');
     const room = debug.getSnapshot().rooms.find(({ sequence }) => sequence === 0);
     const ring = room?.rings[0];
     if (!room || !ring) throw new Error('Room-zero progress ring was unavailable.');
     debug.setRoomPositionForTest(0, 0.62 - ring.z - 0.35);
     debug.setFlightStateForTest(ring.x, ring.y);
+    debug.setVisibilityForTest(false);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        debug.setVisibilityForTest(true);
+        resolve();
+      });
+    });
   });
   await expect.poll(
     async () => (await snapshot(page)).flightBook.run.ringCount,
