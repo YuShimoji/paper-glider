@@ -1,5 +1,7 @@
 import { flightTuning } from '../FlightTuning';
 import type { ArchiveGateEncounterPhase } from './ArchiveGateEncounter';
+import { createClassicProceduralRoomPlan } from './ProceduralRoomSet';
+import type { ProceduralRoomPlan } from './ProceduralRoomSet';
 import { randomUnit } from './RunSeed';
 
 export const ROOM_LENGTH = 18;
@@ -61,6 +63,7 @@ export interface RoomContentPlan {
   obstacles: ObstaclePlan[];
   clearanceVolumes: readonly ObstacleVolumePlan[];
   rings: PlannedRing[];
+  proceduralRoom: ProceduralRoomPlan;
   encounterPhase: ArchiveGateEncounterPhase;
   encounterCommitSequence: number | null;
 }
@@ -69,6 +72,8 @@ export interface RoomPlanningOptions {
   readonly archetype?: 'procedural' | 'archive-gate';
   readonly clearanceVolumes?: readonly ObstacleVolumePlan[];
   readonly passageTarget?: Readonly<{ x: number; y: number }> | null;
+  readonly nextRoomTarget?: Readonly<{ x: number; y: number }> | null;
+  readonly proceduralRoom?: ProceduralRoomPlan;
   readonly encounterPhase?: ArchiveGateEncounterPhase;
   readonly encounterCommitSequence?: number | null;
 }
@@ -236,10 +241,18 @@ export class RingPathPlanner {
     const archetype = options.archetype ?? 'procedural';
     const encounterPhase = options.encounterPhase ?? 'none';
     const encounterCommitSequence = options.encounterCommitSequence ?? null;
+    const proceduralRoom = options.proceduralRoom
+      ?? createClassicProceduralRoomPlan(sequence);
     const reservedFlightLineRoom = encounterPhase !== 'none';
-    const obstacles = archetype === 'procedural' && !reservedFlightLineRoom ? getObstacles(pattern) : [];
-    const clearanceVolumes = options.clearanceVolumes ?? obstacles.map(toObstacleVolume);
-    const ringCount = archetype === 'archive-gate' || reservedFlightLineRoom
+    const proceduralFamilyRoom = proceduralRoom.familyId !== 'classic-room';
+    const obstacles = archetype === 'procedural' && !reservedFlightLineRoom && !proceduralFamilyRoom
+      ? getObstacles(pattern)
+      : [];
+    const clearanceVolumes = options.clearanceVolumes
+      ?? (proceduralFamilyRoom ? proceduralRoom.obstacleAabbs : obstacles.map(toObstacleVolume));
+    const ringCount = proceduralFamilyRoom
+      ? proceduralRoom.ringHints.length
+      : archetype === 'archive-gate' || reservedFlightLineRoom
       ? 1
       : pattern === 5 && speed < 18
         ? 2
@@ -247,7 +260,10 @@ export class RingPathPlanner {
     const rings: PlannedRing[] = [];
 
     for (let index = 0; index < ringCount; index += 1) {
-      const z = encounterPhase === 'approach'
+      const familyHint = proceduralFamilyRoom ? proceduralRoom.ringHints[index] : null;
+      const z = familyHint
+        ? familyHint.z
+        : encounterPhase === 'approach'
         ? -2.8
         : encounterPhase === 'commit'
           ? 0
@@ -259,8 +275,12 @@ export class RingPathPlanner {
       const courseDistance = sequence * ROOM_LENGTH - z;
       const longitudinalDistance = Math.max(4, courseDistance - this.previous.courseDistance);
       const envelope = calculateReachabilityEnvelope(speed, longitudinalDistance);
-      let selected = options.passageTarget
-        ? targetPoint(this.previous, options.passageTarget, envelope)
+      const requestedTarget = familyHint
+        ?? (index === ringCount - 1 && options.nextRoomTarget
+          ? options.nextRoomTarget
+          : options.passageTarget);
+      let selected = requestedTarget
+        ? targetPoint(this.previous, requestedTarget, envelope)
         : candidatePoint(this.seed, sequence, index, 0, this.previous, envelope);
 
       if (!isRingClearOfVolumes({ ...selected, z }, clearanceVolumes)) {
@@ -306,6 +326,7 @@ export class RingPathPlanner {
       obstacles,
       clearanceVolumes,
       rings,
+      proceduralRoom,
       encounterPhase,
       encounterCommitSequence,
     };

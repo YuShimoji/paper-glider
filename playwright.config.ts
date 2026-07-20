@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-const baseURL = 'http://127.0.0.1:5173/paper-glider/';
+const e2ePort = process.env.PAPER_GLIDER_E2E_PORT ?? '5173';
+const baseURL = `http://127.0.0.1:${e2ePort}/paper-glider/`;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -44,7 +45,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --strictPort',
+    command: `npm run dev -- --strictPort --port ${e2ePort}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

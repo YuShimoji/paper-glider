@@ -20,6 +20,11 @@ import {
 import type { BufferGeometry, Material, Scene, Texture } from 'three';
 import type { WorkbenchRoomAssetLibrary } from './assets/WorkbenchRoomManifest';
 import type { ArchiveGateEncounterPhase } from './simulation/ArchiveGateEncounter';
+import { planProceduralRoom } from './simulation/ProceduralRoomSet';
+import type {
+  ProceduralMaterialRole,
+  ProceduralRoomPlan,
+} from './simulation/ProceduralRoomSet';
 import { RingPathPlanner, ROOM_LENGTH } from './simulation/RingPath';
 import type { PlannedRing, RoomContentPlan } from './simulation/RingPath';
 import { getRoomArchetypeDirective } from './simulation/RoomArchetype';
@@ -78,6 +83,12 @@ export interface RoomDiagnostic {
   readonly encounterPhase: ArchiveGateEncounterPhase;
   readonly encounterCommitSequence: number | null;
   readonly cueCount: number;
+  readonly familyId: ProceduralRoomPlan['familyId'];
+  readonly familyVariant: ProceduralRoomPlan['variant'];
+  readonly familyLabel: string;
+  readonly familyPrimitiveCount: number;
+  readonly safeLane: ProceduralRoomPlan['safeLane'];
+  readonly reaction: ProceduralRoomPlan['reaction'];
   readonly rings: readonly Readonly<{
     x: number;
     y: number;
@@ -85,6 +96,12 @@ export interface RoomDiagnostic {
     collected: boolean;
     encounterPhase: ArchiveGateEncounterPhase;
   }>[];
+}
+
+export interface WorldResourceDiagnostic {
+  readonly proceduralPrimitiveMeshes: number;
+  readonly proceduralPrimitiveGeometries: number;
+  readonly proceduralPrimitiveMaterials: number;
 }
 
 export interface WorldEncounterPhase {
@@ -307,6 +324,12 @@ export class CorridorWorld {
       encounterPhase: segment.plan.encounterPhase,
       encounterCommitSequence: segment.plan.encounterCommitSequence,
       cueCount: segment.flightLineCues.length,
+      familyId: segment.plan.proceduralRoom.familyId,
+      familyVariant: segment.plan.proceduralRoom.variant,
+      familyLabel: segment.plan.proceduralRoom.devLabel,
+      familyPrimitiveCount: segment.plan.proceduralRoom.primitives.length,
+      safeLane: segment.plan.proceduralRoom.safeLane,
+      reaction: segment.plan.proceduralRoom.reaction,
       rings: segment.rings.map((ring) => ({
         x: ring.plan.x,
         y: ring.plan.y,
@@ -315,6 +338,26 @@ export class CorridorWorld {
         encounterPhase: ring.plan.encounterPhase,
       })),
     }));
+  }
+
+  getResourceDiagnostics(): WorldResourceDiagnostic {
+    const geometries = new Set<string>();
+    const materials = new Set<string>();
+    let meshes = 0;
+    for (const segment of this.segments) {
+      segment.group.traverse((node) => {
+        if (!(node instanceof Mesh) || node.userData.proceduralPrimitive !== true) return;
+        meshes += 1;
+        geometries.add(node.geometry.uuid);
+        const nodeMaterials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of nodeMaterials) materials.add(material.uuid);
+      });
+    }
+    return {
+      proceduralPrimitiveMeshes: meshes,
+      proceduralPrimitiveGeometries: geometries.size,
+      proceduralPrimitiveMaterials: materials.size,
+    };
   }
 
   getEncounterAtPlayer(playerZ: number): WorldEncounterPhase {
@@ -411,11 +454,16 @@ export class CorridorWorld {
     const pages: FloatingPage[] = [];
     const flightLineCues: FlightLineCue[] = [];
     const theme = this.themes[sequence % this.themes.length];
+    const assetAvailable = this.assetLibrary !== null;
     const directive = getRoomArchetypeDirective(
       this.runSeed,
       sequence,
-      this.assetLibrary !== null,
+      assetAvailable,
     );
+    const proceduralRoom = planProceduralRoom(this.runSeed, sequence, assetAvailable);
+    const upcomingProceduralRoom = [1, 2]
+      .map((offset) => planProceduralRoom(this.runSeed, sequence + offset, assetAvailable))
+      .find((candidate) => candidate.safeLane !== null);
     const clearanceVolumes = directive.archetype === 'archive-gate'
       ? this.assetLibrary?.obstacleVolumes
       : undefined;
@@ -423,6 +471,10 @@ export class CorridorWorld {
       archetype: directive.archetype,
       clearanceVolumes,
       passageTarget: directive.passageTarget,
+      nextRoomTarget: directive.encounterPhase === 'none'
+        ? upcomingProceduralRoom?.safeLane
+        : null,
+      proceduralRoom,
       encounterPhase: directive.encounterPhase,
       encounterCommitSequence: directive.encounterCommitSequence,
     });
@@ -506,6 +558,11 @@ export class CorridorWorld {
   ): void {
     for (const ring of plan.rings) this.addRing(group, ring, rings);
 
+    if (plan.proceduralRoom.familyId !== 'classic-room') {
+      this.addProceduralFamilyContents(group, theme, plan.proceduralRoom, colliders);
+      return;
+    }
+
     for (const obstacle of plan.obstacles) {
       switch (obstacle.kind) {
         case 'bookcase':
@@ -527,6 +584,50 @@ export class CorridorWorld {
           this.addLowCabinet(group, obstacle.x, obstacle.z, colliders, theme.accent);
           break;
       }
+    }
+  }
+
+  private addProceduralFamilyContents(
+    group: Group,
+    theme: Theme,
+    plan: ProceduralRoomPlan,
+    colliders: WorldCollider[],
+  ): void {
+    for (const primitive of plan.primitives) {
+      const part = this.scaledBox(
+        primitive.width,
+        primitive.height,
+        primitive.depth,
+        this.getProceduralMaterial(primitive.materialRole, theme),
+        primitive.x,
+        primitive.y,
+        primitive.z,
+      );
+      part.userData.proceduralPrimitive = true;
+      part.userData.proceduralPrimitiveId = primitive.id;
+      group.add(part);
+    }
+    for (const obstacle of plan.obstacleAabbs) {
+      this.addCollider(
+        group,
+        new Vector3(obstacle.halfX, obstacle.halfY, obstacle.halfZ),
+        obstacle.label,
+        colliders,
+        new Vector3(obstacle.x, obstacle.y, obstacle.z),
+      );
+    }
+  }
+
+  private getProceduralMaterial(role: ProceduralMaterialRole, theme: Theme): Material {
+    switch (role) {
+      case 'gallery-partition':
+        return theme.accent;
+      case 'gallery-trim':
+        return this.trim;
+      case 'loft-slab':
+        return this.darkWood;
+      case 'loft-edge':
+        return this.metal;
     }
   }
 

@@ -31,6 +31,11 @@ import {
   ARCHIVE_GATE_FLIGHT_LINE_APPROACH_INDEX,
   ARCHIVE_GATE_FLIGHT_LINE_RECOVERY_INDEX,
 } from '../../src/game/simulation/ArchiveGateEncounter';
+import {
+  PROCEDURAL_ROOM_SET_CANARY_OFFSET_GALLERY_SEQUENCE,
+  PROCEDURAL_ROOM_SET_CANARY_SEED,
+  PROCEDURAL_ROOM_SET_CANARY_SPLIT_LOFT_SEQUENCE,
+} from '../../src/game/simulation/ProceduralRoomSet';
 
 const manifest = validateWorkbenchRoomManifest(JSON.parse(readFileSync(
   resolve('public/assets/workbench/paper-glider-v1/paper-glider-archive-gate.manifest.json'),
@@ -148,6 +153,54 @@ describe('Archive Gate deterministic room integration', () => {
       room.sequence === ARCHIVE_GATE_CANARY_ROOM_INDEX + 9 && room.archetype === 'archive-gate'
     ))).toBe(true);
     expect(library.getMetrics()).toEqual({ fetchCount: 2, parseCount: 1, cloneCount: 2 });
+  });
+
+  test('keeps family geometry and material identities bounded through long recycling', () => {
+    const maximumSpeed = speedBands[speedBands.length - 1];
+    const world = new CorridorWorld(
+      new Scene(),
+      new Texture(),
+      PROCEDURAL_ROOM_SET_CANARY_SEED,
+      createLibrary(),
+    );
+    world.reset(PROCEDURAL_ROOM_SET_CANARY_SEED, maximumSpeed);
+
+    for (let cycle = 0; cycle < 12; cycle += 1) {
+      const resources = world.getResourceDiagnostics();
+      expect(resources.proceduralPrimitiveGeometries).toBeLessThanOrEqual(1);
+      expect(resources.proceduralPrimitiveMaterials).toBeLessThanOrEqual(4);
+      expect(resources.proceduralPrimitiveMeshes).toBeLessThanOrEqual(9);
+      expect(world.getRoomDiagnostics()).toHaveLength(9);
+      world.advanceDistanceForTest(180, maximumSpeed);
+    }
+  });
+
+  test('uses planned family AABBs for safe-lane clearance and collision', () => {
+    const world = new CorridorWorld(
+      new Scene(),
+      new Texture(),
+      PROCEDURAL_ROOM_SET_CANARY_SEED,
+      createLibrary(),
+    );
+    world.reset(PROCEDURAL_ROOM_SET_CANARY_SEED, 22);
+
+    const assertFamilyCollision = (sequence: number, labelPrefix: string): void => {
+      const room = world.getRoomDiagnostics().find((candidate) => candidate.sequence === sequence);
+      const collider = world.getColliders().find((candidate) => candidate.label.startsWith(labelPrefix));
+      expect(room?.safeLane).not.toBeNull();
+      expect(collider).toBeDefined();
+      const center = collider!.anchor.getWorldPosition(new Vector3());
+      expect(collisionIntersects(center, collider!, new Vector3())).toBe(true);
+      expect(collisionIntersects(
+        new Vector3(room!.safeLane!.x, room!.safeLane!.y, center.z),
+        collider!,
+        new Vector3(),
+      )).toBe(false);
+    };
+
+    assertFamilyCollision(PROCEDURAL_ROOM_SET_CANARY_SPLIT_LOFT_SEQUENCE, 'split loft');
+    world.advanceDistanceForTest(72, 22);
+    assertFamilyCollision(PROCEDURAL_ROOM_SET_CANARY_OFFSET_GALLERY_SEQUENCE, 'offset gallery');
   });
 
   test('falls back to the unchanged procedural room sequence without a validated library', () => {

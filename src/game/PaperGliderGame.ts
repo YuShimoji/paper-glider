@@ -76,6 +76,7 @@ interface DebugSnapshot extends GameSnapshot {
     cloneCount: number;
   };
   rooms: readonly RoomDiagnostic[];
+  resources: ReturnType<CorridorWorld['getResourceDiagnostics']>;
   cleanLine: CleanLineState;
 }
 
@@ -99,6 +100,7 @@ declare global {
       normalizeVisualForTest: () => void;
       setFlightStateForTest: (x: number, y: number) => void;
       setColliderDebugVisible: (visible: boolean) => void;
+      checkCollisionsForTest: () => void;
       advanceRoomsForTest: (distance: number) => void;
       setRoomPositionForTest: (sequence: number, z: number) => boolean;
     };
@@ -740,6 +742,7 @@ export class PaperGliderGame {
             ...assetMetrics,
           },
           rooms: this.world.getRoomDiagnostics(),
+          resources: this.world.getResourceDiagnostics(),
           cleanLine: this.cleanLineState,
         };
       },
@@ -802,6 +805,7 @@ export class PaperGliderGame {
         this.glider.position.set(x, y, 0.62);
       },
       setColliderDebugVisible: (visible) => this.world.setColliderDebugVisible(visible),
+      checkCollisionsForTest: () => this.checkCollisions(),
       advanceRoomsForTest: (distance) => this.world.advanceDistanceForTest(distance),
       setRoomPositionForTest: (sequence, z) => this.world.setRoomPositionForTest(sequence, z),
     };
