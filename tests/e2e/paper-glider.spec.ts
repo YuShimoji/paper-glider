@@ -385,7 +385,7 @@ async function prepareFlightLineVisual(
   });
   await page.waitForTimeout(120);
   // The production hint expires after 5.2 s; keep the intended visual fixture stable on slow CI runners.
-  await page.locator('.controls-hint').evaluate((element) => element.classList.add('is-visible'));
+  await pinControlsHintForVisual(page);
   await hideFlightBookHudForLegacyVisual(page);
 }
 
@@ -426,6 +426,14 @@ async function captureVisual(
   expect(captured).toMatchSnapshot(name, {
     threshold: 0.22,
     maxDiffPixelRatio: 0.012,
+  });
+}
+
+async function pinControlsHintForVisual(page: import('@playwright/test').Page): Promise<void> {
+  await page.locator('.controls-hint').evaluate((element) => {
+    element.classList.add('is-visible');
+    element.style.opacity = '1';
+    element.style.transform = 'translate(-50%, 0)';
   });
 }
 
@@ -947,7 +955,7 @@ test('@visual Flight Book one-line running progress', async ({ page }) => {
     debug.normalizeVisualForTest();
     debug.setVisibilityForTest(true);
   });
-  await page.locator('.controls-hint').evaluate((element) => element.classList.add('is-visible'));
+  await pinControlsHintForVisual(page);
   await expect(page.locator('.flight-book-live')).toContainText('1/8 rings');
   await captureVisual(page, 'flight-book-running-progress.png');
   expect(errors).toEqual([]);
@@ -970,7 +978,7 @@ test('@visual Flight Book new fold notice through CLEAN LINE', async ({ page }) 
     debug.normalizeVisualForTest();
     debug.setVisibilityForTest(true);
   });
-  await page.locator('.controls-hint').evaluate((element) => element.classList.add('is-visible'));
+  await pinControlsHintForVisual(page);
   await expect(page.locator('.flight-book-toast')).toContainText('Blueprint Fold');
   await expect(page.locator('.flight-book-toast')).toBeVisible();
   await captureVisual(page, 'flight-book-new-fold.png');
