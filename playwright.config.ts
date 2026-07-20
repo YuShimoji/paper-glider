@@ -9,6 +9,7 @@ export default defineConfig({
   timeout: 60_000,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: Boolean(process.env.CI),
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{projectName}/{arg}{ext}',
   expect: {
