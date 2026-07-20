@@ -4,19 +4,19 @@ This is the durable restart and supervising-AI entrypoint. Read it with `README.
 
 ## Current conclusion
 
-**LOCAL_FLIGHT_BOOK_V1_TECHNICALLY_ACCEPTED — PUBLICATION_PENDING**
+**PUBLISHED_WITH_LOCAL_FLIGHT_BOOK_V1**
 
-PG-S1 Local Flight Book v1 is technically accepted at exact source/test candidate `c4bbea284baa1758fd34c04231119f70572d4bd1` on `codex/local-flight-book-v1`; its runtime and generated Pages artifact remain the implementation accepted at `52f48ecad3088f0c58f03f9a72722fc26799be27`. The focused branch was pushed through the first technical handoff, integrated without rewriting at main merge `666741fbb4205d148094fa9632c02a67fc14933e`, and the legacy Pages build for that SHA succeeded. Its first exact-main validation CI exposed two visual-fixture timing races; both now have cause-specific test-only fixes, and the final detached clean-worktree package, unit, build, full Playwright, visual-regression, production-preview, asset, rights, and diff gates are green. The fixes are not yet reintegrated at this checkpoint, so this status is deliberately not `PUBLISHED_WITH_LOCAL_FLIGHT_BOOK_V1`.
+PG-S1 Local Flight Book v1 is published from legacy GitHub Pages `main:/docs`. The implementation/runtime/generated artifact remains the candidate accepted at `52f48ecad3088f0c58f03f9a72722fc26799be27`; the complete focused source/test head is `8ffa3cda5e8e85e5b4da7a3100445ba2266299da`; the exact accepted main runtime merge is `e44ee6093c15c69a2a018039020987c3493970a8`. Exact-main CI `29780990393` passed with CI configured to reject flaky retries, and its final log is 10/54 unit plus 53 Playwright passed, 13 intentional skips, 0 flaky, 0 failed. Exact legacy Pages `29780987990` succeeded and the Pages API remained `status=built`, `build_type=legacy`, `source=main:/docs`.
 
 PG-S1 adds three local goals and three cosmetic paper folds without changing flight physics, Rings, Best, Line bonus, CLEAN LINE, collisions, room selection, ring generation, Archive Gate, or Pages ownership. Progress is driven by deterministic versioned run events through a pure reducer; unlocks and the selected fold use one bounded versioned localStorage record. The start/result overlays and one-line in-flight progress fit the fixed desktop/mobile viewports, and production still exposes no debug API.
 
-Publication completion requires: push the focused stabilization commits, guarded non-rewriting main reintegration, green exact-main GitHub CI, exact-main legacy Pages, Pages API confirmation, and public fixed-seed readback including one canonical unlock plus style-selection/reload persistence. Until those are green, PG-S1 is present in the public bundle but is not publication-accepted; the last fully closed baseline remains PG-A3.
+The public fixed-seed readback also passed without a production debug API: real pointer input on `?seed=1BADB068` collected seven planned rings, completed Archive Gate CLEAN LINE, wrote only the bounded `clean-archive`/`blueprint-fold` save, selected Blueprint Fold on the result screen, and retained the selected fold after reload. Desktop and 390×844 mobile both returned HTTP 200 at the `/paper-glider/` subpath, exposed WebGL, produced zero console/page errors, and retained the fixed mobile non-scroll bounds.
 
 PG-A2 Archive Gate Flight Line and PG-A3 Deterministic Room Set v1 are published. PG-A3 was locally accepted at exact source commit `b97af97c26cd15e0a66910b6c77d320b1ce2b2db`, integrated without history rewriting at main merge `5a56f7152b5a73f379061e871a605c38783dc2b9`, passed the real GitHub CI and legacy Pages runs for that exact SHA, and passed a production fixed-seed public readback.
 
 PG-A3 adds two actually playable procedural families without changing flight physics or score semantics: Offset Gallery makes a left/right lane decision, and Split Loft makes an upper/lower lane decision. Their visual primitives, collision AABBs, safe lane, ring hints, reaction budget, and test label come from one immutable pure plan. A 48-seed × 5-speed × 72-room matrix and real Chromium collision checks are green.
 
-The automated and public PG-A3 gates are closed. Physical-phone touch, constrained-device performance, non-Chromium behavior, and 15–30 minute human game-feel acceptance remain explicitly open and are not implied by this status.
+The automated and public PG-S1 gates are closed. Physical-phone touch, constrained-device performance, non-Chromium behavior, and 15–30 minute human game-feel acceptance remain explicitly open and are not implied by this status.
 
 ## PG-S1 technical checkpoint
 
@@ -28,7 +28,7 @@ The automated and public PG-A3 gates are closed. Physical-phone touch, constrain
 - Start Pages API: `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`.
 - Start public canary `https://yushimoji.github.io/paper-glider/?seed=1BADB000`: document/assets HTTP 200, WebGL available, seed visible, production debug absent, console/page errors `0`.
 - Focused branch: `codex/local-flight-book-v1`.
-- Exact accepted source/test candidate: `c4bbea284baa1758fd34c04231119f70572d4bd1`; runtime/generated artifact candidate: `52f48ecad3088f0c58f03f9a72722fc26799be27`.
+- Exact accepted focused source/test head: `8ffa3cda5e8e85e5b4da7a3100445ba2266299da`; runtime/generated artifact candidate: `52f48ecad3088f0c58f03f9a72722fc26799be27`.
 - First non-rewriting main integration: `666741fbb4205d148094fa9632c02a67fc14933e`; at this checkpoint `main...origin/main=0/0`, clean, and no unknown remote advance or user-owned worktree change is present.
 - First merge CI `29769272861`: failed only the mobile `Flight Book one-line running progress` visual on the initial run and retry; 52 tests passed, 13 intentionally skipped, and no product assertion failed. Artifact evidence was downloaded before changing the fixture.
 - First merge legacy Pages `29769271943`: success for exact `666741f`.
@@ -67,9 +67,11 @@ The automated and public PG-A3 gates are closed. Physical-phone touch, constrain
 - Offset/Split progress consumes the runtime room context and each room's first guide-ring collection; it does not alter the pure PG-A3 plan or ring order.
 - Production has no `window.__paperGliderDebug`; tests use only the existing DEV surface.
 
-### Exact-candidate acceptance evidence
+### Runtime-candidate and final-test acceptance evidence
 
 Detached exact worktree: `C:\Users\thank\AppData\Local\Temp\paper-glider-pgs1-c4bbea2-validation-07`
+
+This detached worktree is the clean full local acceptance of the unchanged runtime/generated artifact. Later commits through `8ffa3cd` affect tests/CI policy only and are accepted by the focused repeats and exact-main fail-on-flaky CI recorded below.
 
 - `npm ci`: 165 packages, audit vulnerabilities `0`.
 - `npm ls --depth=0`: pass; Three `0.180.0`, Playwright `1.61.1`, Vitest `4.1.10`, Vite `7.3.6`, TypeScript `5.9.3`.
@@ -112,8 +114,42 @@ Exact-build preview: `http://127.0.0.1:5235/paper-glider/?seed=1BADB000` before 
 | `5b7868b` | Docs-only technical handoff | Record the first PG-S1 technical acceptance boundary |
 | `4a380f1` | Test-only CI stabilization | Freeze the canonical live-progress fixture after one real animation-frame event |
 | `c4bbea2` | Test-only visual stabilization | Pin the intentionally visible timed control hint in fixed visual fixtures |
+| `73f088f` | Docs-only technical handoff | Record the first CI failure, exact clean validation, and stabilization boundary |
+| `83c18c8` | Test-only visual stabilization | Normalize pooled Gate animation and isolate the result crash from route rings |
+| `6348ffd` | Test-only lifecycle stabilization | Observe exactly one resumed visibility frame instead of an 80 ms wall-clock window |
+| `7aea14c` | Test-only phase stabilization | Freeze positioned Flight Line phases before slow polling can overrun them |
+| `7fbc7a3` | CI policy | Make CI fail when a Playwright retry produces a flaky result |
+| `8ffa3cd` | Test-only phase stabilization | Pause on the first rAF where both canonical phase and positioned ring capture are observed |
 
-The implementation/runtime candidate remains `52f48ec`; the complete source/test candidate is `c4bbea2`. The first integration merge and legacy Pages run succeeded, while its CI exposed the fixture races above. Push/reintegration of the two fixes, a new exact-main green CI/Pages pair, public readback, and publication closeout are still pending at this checkpoint.
+The implementation/runtime candidate remains `52f48ec`; the complete focused source/test head is `8ffa3cd`. All later changes are test, CI-policy, or durable documentation only. No later commit changes production TypeScript/CSS, generated `docs/`, gameplay, assets, or visual baselines.
+
+## PG-S1 publication closeout
+
+### Integration and real GitHub evidence
+
+- Initial non-rewriting main merge: `666741fbb4205d148094fa9632c02a67fc14933e`.
+- Subsequent non-rewriting stabilization merges: `1114f6d`, `824d443`, `b67ac91`, `514999e`, and final runtime/test merge `e44ee6093c15c69a2a018039020987c3493970a8`.
+- First merge CI `29769272861`: failed the mobile live-progress visual on both attempts; 52 passed and 13 skipped. Artifact actual/expected/diff evidence was inspected before commit `4a380f1`; no baseline was updated.
+- CI `29774796461`: GitHub conclusion success but log contained two flaky mobile visuals (result and Archive Gate), 51 passed/13 skipped. Artifact inspection showed result score 01 versus canonical 00 and an unnormalized pooled Gate animation; commit `83c18c8` fixed both without runtime/baseline changes.
+- CI `29776881644`: conclusion success but log contained one flaky mobile visibility test, 52 passed/13 skipped. The 80 ms wall-clock observation could include legitimate later frames; commit `6348ffd` observes exactly the first resumed frame.
+- CI `29778261639`: conclusion success but log contained one flaky mobile Gate collision test, 52 passed/13 skipped. Slow polling overran `approach` into `recovery`; commits `7aea14c` and `8ffa3cd` replace it with finite rAF state observation.
+- CI `29779822690`: correctly failed after `failOnFlakyTests` was enabled because NEW FOLD retried once. The first one-rAF callback could precede the game-loop callback; `8ffa3cd` now waits for both phase and score capture and pauses on that first canonical frame.
+- Final exact-main CI `29780990393`: success for exact `e44ee60`, https://github.com/YuShimoji/paper-glider/actions/runs/29780990393. Install/tree, pinned Chromium, typecheck, lint, 10 files/54 unit tests, 24-module production build, 53 Playwright passes, 13 intentional skips, 0 flaky, 0 failed, and report upload all passed in 13m50s.
+- Final exact legacy Pages `29780987990`: success for exact `e44ee60`, https://github.com/YuShimoji/paper-glider/actions/runs/29780987990.
+- Pages API after final runtime publication: `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`. `.github/workflows/ci.yml` remains validation-only; no Actions Pages migration was made.
+- Focused repeat evidence after the CI findings: result/Gate visuals 10/10; visibility first-frame desktop/mobile 20/20; Gate collision desktop/mobile 20/20; CLEAN LINE desktop/mobile 10/10; final NEW FOLD desktop/mobile 10/10 plus CLEAN LINE/collision 12/12. The complete normal visual suite was 31 passed/7 intentional skips/0 failed with no baseline update after `52f48ec`.
+
+### Public production readback
+
+Public acceptance URL: `https://yushimoji.github.io/paper-glider/?seed=1BADB068`.
+
+- Desktop 1280×720 loaded the document and Archive Gate GLB with HTTP 200, used the correct `/paper-glider/` subpath, exposed WebGL, showed seed `1BADB068`, three goals and three locked reward styles, and exposed no production `window.__paperGliderDebug`.
+- A local DEV page with the same seed was used only as a deterministic coordinate oracle. The public production page received ordinary pointer moves and collected the seven real rings in room sequences `0, 1, 2, 2, 3, 4, 5`, with live score transitions `0→1→2→3→4→5→6→7`.
+- The public run completed the existing Archive Gate CLEAN LINE. The production save became exactly schema `1`, `completedGoalIds=[clean-archive]`, `unlockedStyleIds=[default,blueprint-fold]`, `selectedStyleId=default` before selection.
+- After a real collision opened the result surface, Blueprint Fold was enabled and selected. The save and `#app[data-flight-book-style]` both changed to `blueprint-fold`; a full page reload preserved the selected button, enabled state, app palette, and same bounded save bytes.
+- Mobile 390×844 at seed `1BADB000` returned HTTP 200, `/paper-glider/`, WebGL true, debug undefined, three goals, and live text `Flight Book · Ring Route · 0/8 rings · 0/1 Line`. Start-card bounds were top `32.30`, bottom `811.70`; document client/scroll height were both `844`.
+- Desktop and mobile console/page errors: `0`. Temporary oracle port 5249 was stopped after PID/command-line verification. Operator preview 4173 remained PID 23548 and was not changed.
+- Public automation proves the Chromium/software-WebGL/public-byte boundary only. It does not substitute for physical-phone touch, low-end performance, non-Chromium, or long human game-feel review.
 
 ## Repository and publication state
 
@@ -121,6 +157,14 @@ The implementation/runtime candidate remains `52f48ec`; the complete source/test
 - Public game: https://yushimoji.github.io/paper-glider/
 - PG-A2 fixed run: https://yushimoji.github.io/paper-glider/?seed=1BADB068
 - PG-A3 fixed run: https://yushimoji.github.io/paper-glider/?seed=1BADB000
+- PG-S1 accepted runtime/test main merge: `e44ee6093c15c69a2a018039020987c3493970a8`; this closeout document is a docs-only successor and does not change the public bundle.
+- PG-S1 focused branch: `codex/local-flight-book-v1` at `8ffa3cda5e8e85e5b4da7a3100445ba2266299da`, pushed with `HEAD...origin/codex/local-flight-book-v1=0/0` before closeout.
+- PG-S1 final CI `29780990393` and legacy Pages `29780987990`: success for exact `e44ee60`; public seed `1BADB068` unlock/style/reload readback passed.
+- PG-S1 Pages ownership: `status=built`, `build_type=legacy`, `source=main:/docs`; validation CI is not a deploy workflow.
+- No PR, tag, release, force-push, backend, account, telemetry, external API, currency, shop, external asset, or Pages-source migration was introduced.
+
+The PG-A3 entries below are retained as historical publication provenance:
+
 - Session start: `main` at `cbc494e52b00e855004fbf926ea3675af3cfbe16`, `HEAD...origin/main=0/0`, clean.
 - PG-A2 readback closeout: docs-only `34ecbb191351e8398043ecdbc152447980f13dcf` on `main`, pushed.
 - Focused branch: `codex/deterministic-room-set-v1` at `b6ee4038117e01f2324cb5a4014ad293ab9e0082`, pushed with `HEAD...upstream=0/0`.
@@ -423,8 +467,8 @@ $env:PAPER_GLIDER_E2E_PORT = '5206'
 npm run test:e2e
 npm run test:visual
 git diff --check
-gh run view 29723131837 --json status,conclusion,jobs,url,headSha
-gh run view 29723131370 --json status,conclusion,jobs,url,headSha
+gh run view 29780990393 --json status,conclusion,jobs,url,headSha
+gh run view 29780987990 --json status,conclusion,jobs,url,headSha
 gh api repos/YuShimoji/paper-glider/pages
 ```
 
