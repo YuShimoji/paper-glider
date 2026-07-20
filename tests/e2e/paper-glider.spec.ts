@@ -180,6 +180,7 @@ async function enterFlightLinePhase(
   await page.evaluate(({ phase, approachSequence, commitSequence, recoverySequence }) => {
     const debug = window.__paperGliderDebug;
     if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(false);
     const rooms = debug.getSnapshot().rooms;
     const sequence = phase === 'approach'
       ? approachSequence
@@ -208,6 +209,7 @@ async function enterFlightLinePhase(
     recoverySequence: FLIGHT_LINE_RECOVERY,
   });
   await expect.poll(async () => (await snapshot(page)).cleanLine.phase).toBe(phase);
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
 }
 
 async function completeCleanLine(page: import('@playwright/test').Page): Promise<void> {
@@ -218,6 +220,7 @@ async function completeCleanLine(page: import('@playwright/test').Page): Promise
   await enterFlightLinePhase(page, 'recovery');
   await expect.poll(async () => (await snapshot(page)).score).toBeGreaterThanOrEqual(3);
   await page.evaluate((recoverySequence) => {
+    window.__paperGliderDebug?.setVisibilityForTest(false);
     window.__paperGliderDebug?.setRoomPositionForTest(recoverySequence, 10);
   }, FLIGHT_LINE_RECOVERY);
   await expect.poll(async () => (await snapshot(page)).cleanLine.resultVisible).toBe(true);
@@ -296,7 +299,14 @@ async function setDocumentHidden(page: import('@playwright/test').Page, hidden: 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('?seed=1BADB002');
-  await expect(page.locator('.start-overlay')).toBeVisible();
+  const startOverlay = page.locator('.start-overlay');
+  try {
+    await expect(startOverlay).toBeVisible({ timeout: 8_000 });
+  } catch {
+    // Software WebGL can recycle one context during a long Chromium campaign.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(startOverlay).toBeVisible({ timeout: 8_000 });
+  }
   await page.waitForTimeout(350);
 });
 
@@ -491,6 +501,7 @@ test('flies the central passage and collides with both manifest pier and top bea
     const debug = window.__paperGliderDebug;
     debug?.setFlightStateForTest(-3.65, 1.68);
     debug?.setRoomPositionForTest(commitSequence, 0.62);
+    debug?.checkCollisionsForTest();
   }, FLIGHT_LINE_COMMIT);
   await expect.poll(async () => (await snapshot(page)).mode).toBe('gameover');
   await expect(page.locator('.gameover-copy')).toHaveText(/archive gate left pier/i);
@@ -511,6 +522,7 @@ test('flies the central passage and collides with both manifest pier and top bea
     const debug = window.__paperGliderDebug;
     debug?.setFlightStateForTest(0, 4.13);
     debug?.setRoomPositionForTest(commitSequence, 0.62);
+    debug?.checkCollisionsForTest();
   }, FLIGHT_LINE_COMMIT);
   await expect.poll(async () => (await snapshot(page)).mode).toBe('gameover');
   await expect(page.locator('.gameover-copy')).toHaveText(/archive gate top beam/i);
@@ -599,10 +611,11 @@ for (const familyId of ['offset-gallery', 'split-loft'] as const) {
       }
       debug.setFlightStateForTest(room.safeLane.x, room.safeLane.y);
       debug.setRoomPositionForTest(sequence, 0.62 - room.reaction.obstacleZ);
+      debug.checkCollisionsForTest();
+      debug.setVisibilityForTest(true);
     }, { familyId, offsetSequence: OFFSET_GALLERY_SEQUENCE, splitSequence: SPLIT_LOFT_SEQUENCE });
     await page.waitForTimeout(100);
     expect((await snapshot(page)).mode).toBe('playing');
-    await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
     expect((await snapshot(page)).rooms.some((room) => room.familyId === familyId)).toBe(true);
 
     await page.evaluate(({ familyId, offsetSequence, splitSequence }) => {
@@ -619,7 +632,7 @@ for (const familyId of ['offset-gallery', 'split-loft'] as const) {
         : 2.35;
       debug.setFlightStateForTest(unsafeX, unsafeY);
       debug.setRoomPositionForTest(sequence, 0.62 - room.reaction.obstacleZ);
-      debug.setVisibilityForTest(false);
+      debug.checkCollisionsForTest();
     }, { familyId, offsetSequence: OFFSET_GALLERY_SEQUENCE, splitSequence: SPLIT_LOFT_SEQUENCE });
     await expect.poll(async () => (await snapshot(page)).mode).toBe('gameover');
     await expect(page.locator('.gameover-copy')).toContainText(familyId.replace('-', ' '));
