@@ -31,6 +31,33 @@ interface DebugSnapshot {
     resultRemainingSeconds: number;
     resultSerial: number;
   };
+  flightBook: {
+    persistent: {
+      version: 1;
+      completedGoalIds: Array<'ring-route' | 'clean-archive' | 'room-tour'>;
+      unlockedStyleIds: Array<'default' | 'amber-kraft' | 'blueprint-fold' | 'sage-ledger'>;
+      selectedStyleId: 'default' | 'amber-kraft' | 'blueprint-fold' | 'sage-ledger';
+    };
+    run: {
+      runId: string | null;
+      seed: number | null;
+      runSequence: number;
+      status: 'idle' | 'active' | 'crashed' | 'ended' | 'restarted';
+      ringCount: number;
+      lineBonusCount: number;
+      cleanLineCount: number;
+      families: Record<'offset-gallery' | 'split-loft', {
+        stage: 'not-entered' | 'entered' | 'guided' | 'exited';
+        roomSequence: number | null;
+      }>;
+      processedEventIds: string[];
+      newlyUnlockedStyleIds: Array<'default' | 'amber-kraft' | 'blueprint-fold' | 'sage-ledger'>;
+    };
+    notification: {
+      styleId: 'amber-kraft' | 'blueprint-fold' | 'sage-ledger' | null;
+      remainingSeconds: number;
+    };
+  };
   resources: {
     proceduralPrimitiveMeshes: number;
     proceduralPrimitiveGeometries: number;
@@ -79,6 +106,13 @@ const ROOM_SET_SEED = '1BADB000';
 const SPLIT_LOFT_SEQUENCE = 2;
 const ROOM_SET_ARCHIVE_GATE_SEQUENCE = 8;
 const OFFSET_GALLERY_SEQUENCE = 11;
+const FLIGHT_BOOK_STORAGE_KEY = 'paperGlider.flightBook.v1';
+const FLIGHT_BOOK_FULL_SAVE = {
+  version: 1,
+  completedGoalIds: ['ring-route', 'clean-archive', 'room-tour'],
+  unlockedStyleIds: ['default', 'amber-kraft', 'blueprint-fold', 'sage-ledger'],
+  selectedStyleId: 'default',
+} as const;
 
 async function snapshot(page: import('@playwright/test').Page): Promise<DebugSnapshot> {
   return page.evaluate(() => {
@@ -126,10 +160,32 @@ async function gotoRoomSet(page: import('@playwright/test').Page): Promise<void>
   await expect.poll(async () => (await snapshot(page)).asset.status).toBe('loaded');
 }
 
+async function setFlightBookSave(
+  page: import('@playwright/test').Page,
+  value: unknown,
+): Promise<void> {
+  await page.evaluate(({ key, serialized }) => {
+    window.localStorage.setItem(key, serialized);
+  }, { key: FLIGHT_BOOK_STORAGE_KEY, serialized: typeof value === 'string' ? value : JSON.stringify(value) });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
+  await expect.poll(async () => (await snapshot(page)).asset.status).toBe('loaded');
+}
+
+async function selectPersistedStyle(
+  page: import('@playwright/test').Page,
+  selectedStyleId: 'default' | 'amber-kraft' | 'blueprint-fold' | 'sage-ledger',
+): Promise<void> {
+  await setFlightBookSave(page, { ...FLIGHT_BOOK_FULL_SAVE, selectedStyleId });
+  expect((await snapshot(page)).flightBook.persistent.selectedStyleId).toBe(selectedStyleId);
+  await expect(page.locator('#app')).toHaveAttribute('data-flight-book-style', selectedStyleId);
+}
+
 async function prepareFamilyVisual(
   page: import('@playwright/test').Page,
   familyId: 'offset-gallery' | 'split-loft',
   colliders = false,
+  showFlightBook = false,
 ): Promise<void> {
   await page.evaluate(({ familyId, colliders, offsetSequence, splitSequence }) => {
     const debug = window.__paperGliderDebug;
@@ -158,12 +214,14 @@ async function prepareFamilyVisual(
     offsetSequence: OFFSET_GALLERY_SEQUENCE,
     splitSequence: SPLIT_LOFT_SEQUENCE,
   });
+  if (!showFlightBook) await hideFlightBookHudForLegacyVisual(page);
   await page.waitForTimeout(120);
 }
 
 async function prepareArchiveGateVisual(
   page: import('@playwright/test').Page,
   options: { colliders?: boolean; recycled?: boolean } = {},
+  showFlightBook = false,
 ): Promise<void> {
   await page.evaluate(({ colliders, recycled }) => {
     const debug = window.__paperGliderDebug;
@@ -183,6 +241,7 @@ async function prepareArchiveGateVisual(
     debug.setColliderDebugVisible(Boolean(colliders));
     debug.setVisibilityForTest(true);
   }, options);
+  if (!showFlightBook) await hideFlightBookHudForLegacyVisual(page);
   await page.waitForTimeout(120);
 }
 
@@ -193,7 +252,7 @@ async function enterFlightLinePhase(
   await page.evaluate(({ phase, approachSequence, commitSequence, recoverySequence }) => {
     const debug = window.__paperGliderDebug;
     if (!debug) throw new Error('Debug API was not installed.');
-    debug.setVisibilityForTest(false);
+    debug.setVisibilityForTest(true);
     const rooms = debug.getSnapshot().rooms;
     const sequence = phase === 'approach'
       ? approachSequence
@@ -221,11 +280,18 @@ async function enterFlightLinePhase(
     commitSequence: FLIGHT_LINE_COMMIT,
     recoverySequence: FLIGHT_LINE_RECOVERY,
   });
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(false));
   await expect.poll(async () => (await snapshot(page)).cleanLine.phase).toBe(phase);
   await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
 }
 
 async function completeCleanLine(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate((seed) => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(true);
+    debug.restartWithSeed(seed);
+  }, FLIGHT_LINE_SEED);
   await enterFlightLinePhase(page, 'approach');
   await expect.poll(async () => (await snapshot(page)).score).toBeGreaterThanOrEqual(1);
   await enterFlightLinePhase(page, 'commit');
@@ -233,10 +299,50 @@ async function completeCleanLine(page: import('@playwright/test').Page): Promise
   await enterFlightLinePhase(page, 'recovery');
   await expect.poll(async () => (await snapshot(page)).score).toBeGreaterThanOrEqual(3);
   await page.evaluate((recoverySequence) => {
-    window.__paperGliderDebug?.setVisibilityForTest(false);
-    window.__paperGliderDebug?.setRoomPositionForTest(recoverySequence, 10);
+    const debug = window.__paperGliderDebug;
+    debug?.setVisibilityForTest(true);
+    debug?.setRoomPositionForTest(recoverySequence, 10);
   }, FLIGHT_LINE_RECOVERY);
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(false));
   await expect.poll(async () => (await snapshot(page)).cleanLine.resultVisible).toBe(true);
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
+}
+
+async function completeFamilyRoom(
+  page: import('@playwright/test').Page,
+  familyId: 'offset-gallery' | 'split-loft',
+  sequence: number,
+  isolate = false,
+): Promise<void> {
+  await page.evaluate(({ familyId, sequence, isolate }) => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(false);
+    const rooms = debug.getSnapshot().rooms;
+    const room = rooms.find((candidate) => candidate.sequence === sequence);
+    const guide = room?.rings[0];
+    if (!room || room.familyId !== familyId || !guide) {
+      throw new Error(`${familyId} room was unavailable.`);
+    }
+    if (isolate) {
+      for (const candidate of rooms) {
+        if (candidate.sequence !== sequence) {
+          debug.setRoomPositionForTest(candidate.sequence, -120 - candidate.sequence * 18);
+        }
+      }
+    }
+    debug.setRoomPositionForTest(sequence, 0.62 - guide.z - 0.35);
+    debug.setFlightStateForTest(guide.x, guide.y);
+  }, { familyId, sequence, isolate });
+  await expect.poll(
+    async () => (await snapshot(page)).flightBook.run.families[familyId].stage,
+  ).toBe('guided');
+  await page.evaluate((roomSequence) => {
+    window.__paperGliderDebug?.setRoomPositionForTest(roomSequence, 10);
+  }, sequence);
+  await expect.poll(
+    async () => (await snapshot(page)).flightBook.run.families[familyId].stage,
+  ).toBe('exited');
 }
 
 async function prepareFlightLineVisual(
@@ -280,6 +386,7 @@ async function prepareFlightLineVisual(
   await page.waitForTimeout(120);
   // The production hint expires after 5.2 s; keep the intended visual fixture stable on slow CI runners.
   await page.locator('.controls-hint').evaluate((element) => element.classList.add('is-visible'));
+  await hideFlightBookHudForLegacyVisual(page);
 }
 
 async function pointerDown(
@@ -309,6 +416,25 @@ async function setDocumentHidden(page: import('@playwright/test').Page, hidden: 
     Object.defineProperty(document, 'hidden', { configurable: true, value: nextHidden });
     document.dispatchEvent(new Event('visibilitychange'));
   }, hidden);
+}
+
+async function captureVisual(
+  page: import('@playwright/test').Page,
+  name: string,
+): Promise<void> {
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot(name, {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+}
+
+async function hideFlightBookHudForLegacyVisual(
+  page: import('@playwright/test').Page,
+): Promise<void> {
+  await page.locator('.flight-book-live').evaluate((element) => {
+    element.style.visibility = 'hidden';
+  });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -375,6 +501,7 @@ test('freezes all run state while hidden and rebases the first resumed frame', a
   expect(stillPaused.score).toBe(paused.score);
   expect(stillPaused.player).toEqual(paused.player);
   expect(stillPaused.nextRing).toEqual(paused.nextRing);
+  expect(stillPaused.flightBook).toEqual(paused.flightBook);
 
   await setDocumentHidden(page, false);
   await page.waitForTimeout(80);
@@ -385,6 +512,7 @@ test('freezes all run state while hidden and rebases the first resumed frame', a
     resumedSimulationTime * 30 + 0.01,
   );
   expect(afterResume.score).toBe(paused.score);
+  expect(afterResume.flightBook.run.ringCount).toBe(paused.flightBook.run.ringCount);
   expect(afterResume.mode).toBe('playing');
   expect(errors).toEqual([]);
 });
@@ -503,6 +631,80 @@ test('completes Approach, Gate Commit, Recovery, and one visibility-safe CLEAN L
   expect(errors).toEqual([]);
 });
 
+test('unlocks Blueprint Fold through the real CLEAN LINE route and persists selection', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'One real runtime unlock route is sufficient.');
+  const errors = collectRuntimeErrors(page);
+  await gotoFlightLine(page);
+  await startFlight(page);
+  await completeCleanLine(page);
+  const unlocked = await snapshot(page);
+  expect(unlocked.flightBook.persistent.completedGoalIds).toContain('clean-archive');
+  expect(unlocked.flightBook.persistent.unlockedStyleIds).toContain('blueprint-fold');
+  expect(unlocked.flightBook.run.cleanLineCount).toBe(1);
+  await expect(page.locator('.flight-book-toast')).toContainText('Blueprint Fold');
+
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(false));
+  await page.evaluate(() => window.__paperGliderDebug?.aimAtWall());
+  await expect.poll(async () => (await snapshot(page)).mode, { timeout: 6_000 }).toBe('gameover');
+  await expect(page.locator('.gameover-overlay')).toBeVisible();
+  await expect(page.locator('.gameover-overlay .flight-book-run-unlocks')).toContainText('Blueprint Fold');
+  const blueprint = page.locator(
+    '.gameover-overlay .flight-book-style-button[data-flight-book-style="blueprint-fold"]',
+  );
+  await expect(blueprint).toBeEnabled();
+  await blueprint.click();
+  await expect(page.locator('#app')).toHaveAttribute('data-flight-book-style', 'blueprint-fold');
+
+  await page.getByRole('button', { name: 'Fly again' }).click();
+  await expect.poll(async () => (await snapshot(page)).mode).toBe('playing');
+  expect((await snapshot(page)).flightBook.persistent.selectedStyleId).toBe('blueprint-fold');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
+  expect((await snapshot(page)).flightBook.persistent).toMatchObject({
+    completedGoalIds: ['clean-archive'],
+    unlockedStyleIds: ['default', 'blueprint-fold'],
+    selectedStyleId: 'blueprint-fold',
+  });
+  await expect(page.locator('#app')).toHaveAttribute('data-flight-book-style', 'blueprint-fold');
+  expect(errors).toEqual([]);
+});
+
+test('recovers corrupt saves, rejects locked styles, and renders all completed goals', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'Storage contract is viewport-independent.');
+  const errors = collectRuntimeErrors(page);
+  await setFlightBookSave(page, '{broken');
+  expect((await snapshot(page)).flightBook.persistent).toEqual({
+    version: 1,
+    completedGoalIds: [],
+    unlockedStyleIds: ['default'],
+    selectedStyleId: 'default',
+  });
+  await expect(page.locator('.start-overlay .flight-book-style-button:disabled')).toHaveCount(3);
+
+  await setFlightBookSave(page, {
+    version: 1,
+    completedGoalIds: [],
+    unlockedStyleIds: ['default', 'sage-ledger'],
+    selectedStyleId: 'sage-ledger',
+  });
+  await expect(page.locator('#app')).toHaveAttribute('data-flight-book-style', 'default');
+  await page.locator(
+    '.start-overlay .flight-book-style-button[data-flight-book-style="sage-ledger"]',
+  ).evaluate((button: HTMLButtonElement) => button.click());
+  expect((await snapshot(page)).flightBook.persistent.selectedStyleId).toBe('default');
+
+  await setFlightBookSave(page, FLIGHT_BOOK_FULL_SAVE);
+  await expect(page.locator('.start-overlay .flight-book-goal.is-complete')).toHaveCount(3);
+  await expect(page.locator('.start-overlay .flight-book-style-button:enabled')).toHaveCount(4);
+  await page.locator(
+    '.start-overlay .flight-book-style-button[data-flight-book-style="amber-kraft"]',
+  ).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-flight-book-style', 'amber-kraft');
+  const persisted = await page.evaluate((key) => window.localStorage.getItem(key), FLIGHT_BOOK_STORAGE_KEY);
+  expect(JSON.parse(persisted ?? '{}')).toMatchObject({ selectedStyleId: 'amber-kraft' });
+  expect(errors).toEqual([]);
+});
+
 test('flies the central passage and collides with both manifest pier and top beam', async ({ page }) => {
   const errors = collectRuntimeErrors(page);
   await gotoFlightLine(page);
@@ -604,6 +806,24 @@ test('exposes the fixed room-set sequence with both families and Archive Gate', 
   expect(errors).toEqual([]);
 });
 
+test('records ordered guide-ring exits for both room families in one real run', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'One real room-tour route is sufficient.');
+  const errors = collectRuntimeErrors(page);
+  await gotoRoomSet(page);
+  await startFlight(page);
+  await completeFamilyRoom(page, 'split-loft', SPLIT_LOFT_SEQUENCE);
+  await page.evaluate(() => window.__paperGliderDebug?.advanceRoomsForTest(72));
+  await completeFamilyRoom(page, 'offset-gallery', OFFSET_GALLERY_SEQUENCE, true);
+  const completed = await snapshot(page);
+  expect(completed.flightBook.run.families).toEqual({
+    'offset-gallery': { stage: 'exited', roomSequence: OFFSET_GALLERY_SEQUENCE },
+    'split-loft': { stage: 'exited', roomSequence: SPLIT_LOFT_SEQUENCE },
+  });
+  expect(completed.flightBook.persistent.completedGoalIds).toContain('room-tour');
+  expect(completed.flightBook.persistent.unlockedStyleIds).toContain('sage-ledger');
+  expect(errors).toEqual([]);
+});
+
 for (const familyId of ['offset-gallery', 'split-loft'] as const) {
   test(`${familyId} safe lane passes and planned AABB collides`, async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium-desktop', 'One deterministic collision proof is sufficient.');
@@ -683,12 +903,126 @@ test('times out asset preload and starts the procedural fallback', async ({ page
   expect(errors).toEqual([]);
 });
 
+test('@visual Flight Book start panel and locked default collection', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await expect(page.locator('.start-overlay .flight-book-goal')).toHaveCount(3);
+  await expect(page.locator('.start-overlay .flight-book-style-button:disabled')).toHaveCount(3);
+  await captureVisual(page, 'flight-book-start.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Flight Book one-line running progress', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await startFlight(page);
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    const room = debug.getSnapshot().rooms.find(({ sequence }) => sequence === 0);
+    const ring = room?.rings[0];
+    if (!room || !ring) throw new Error('Room-zero progress ring was unavailable.');
+    debug.setRoomPositionForTest(0, 0.62 - ring.z - 0.35);
+    debug.setFlightStateForTest(ring.x, ring.y);
+  });
+  await expect.poll(
+    async () => (await snapshot(page)).flightBook.run.ringCount,
+  ).toBe(1);
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    for (const room of debug.getSnapshot().rooms) {
+      debug.setRoomPositionForTest(
+        room.sequence,
+        room.sequence === 0 ? -7.2 : -120 - room.sequence * 18,
+      );
+    }
+    debug.normalizeVisualForTest();
+    debug.setVisibilityForTest(true);
+  });
+  await page.locator('.controls-hint').evaluate((element) => element.classList.add('is-visible'));
+  await expect(page.locator('.flight-book-live')).toContainText('1/8 rings');
+  await captureVisual(page, 'flight-book-running-progress.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Flight Book new fold notice through CLEAN LINE', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await gotoFlightLine(page);
+  await startFlight(page);
+  await completeCleanLine(page);
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    for (const room of debug.getSnapshot().rooms) {
+      debug.setRoomPositionForTest(
+        room.sequence,
+        room.sequence === 6 ? -7.2 : -120 - room.sequence * 18,
+      );
+    }
+    debug.normalizeVisualForTest();
+    debug.setVisibilityForTest(true);
+  });
+  await page.locator('.controls-hint').evaluate((element) => element.classList.add('is-visible'));
+  await expect(page.locator('.flight-book-toast')).toContainText('Blueprint Fold');
+  await expect(page.locator('.flight-book-toast')).toBeVisible();
+  await captureVisual(page, 'flight-book-new-fold.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Amber Kraft with Offset Gallery', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await selectPersistedStyle(page, 'amber-kraft');
+  await prepareFamilyVisual(page, 'offset-gallery', false, true);
+  await captureVisual(page, 'amber-kraft-offset-gallery.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Blueprint Fold with Archive Gate', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await selectPersistedStyle(page, 'blueprint-fold');
+  await prepareArchiveGateVisual(page, {}, true);
+  await captureVisual(page, 'blueprint-fold-archive-gate.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Sage Ledger with Split Loft', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await selectPersistedStyle(page, 'sage-ledger');
+  await prepareFamilyVisual(page, 'split-loft', false, true);
+  await captureVisual(page, 'sage-ledger-split-loft.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Flight Book result panel with all folds', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await selectPersistedStyle(page, 'sage-ledger');
+  await startFlight(page);
+  await page.evaluate(() => window.__paperGliderDebug?.aimAtWall());
+  await expect.poll(async () => (await snapshot(page)).mode, { timeout: 6_000 }).toBe('gameover');
+  await expect(page.locator('.gameover-overlay')).toBeVisible();
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(true);
+    for (const room of debug.getSnapshot().rooms) {
+      debug.setRoomPositionForTest(
+        room.sequence,
+        room.sequence === 0 ? -7.2 : -120 - room.sequence * 18,
+      );
+    }
+    debug.normalizeVisualForTest();
+  });
+  await expect(page.locator('.gameover-overlay .flight-book-goal.is-complete')).toHaveCount(3);
+  await captureVisual(page, 'flight-book-result.png');
+  expect(errors).toEqual([]);
+});
+
 test('@visual fixed gameplay frame', async ({ page }) => {
   const errors = collectRuntimeErrors(page);
   // Headless Chromium can perform one early software-WebGL context recycle. Reset only after it settles.
   await page.waitForTimeout(1_200);
   await page.evaluate(() => window.__paperGliderDebug?.prepareVisualForTest());
   await page.waitForTimeout(120);
+  await hideFlightBookHudForLegacyVisual(page);
   await expect(page.locator('.hud')).toBeVisible();
   const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
   expect(captured).toMatchSnapshot('gameplay.png', {
@@ -832,6 +1166,7 @@ test('@visual Flight Line CLEAN LINE result and mobile portrait', async ({ page 
   await gotoFlightLine(page);
   await page.evaluate(() => window.__paperGliderDebug?.prepareCleanLineVisualForTest());
   await page.waitForTimeout(120);
+  await hideFlightBookHudForLegacyVisual(page);
   expect((await snapshot(page)).cleanLine).toMatchObject({ resultVisible: true, resultSerial: 1 });
   expect((await snapshot(page)).score).toBe(3);
   await expect(page.locator('.clean-line-result')).toBeVisible();
@@ -859,6 +1194,7 @@ test('@visual procedural fallback remains playable', async ({ page }, testInfo) 
     window.__paperGliderDebug?.setRoomPositionForTest(0, -7.2);
   });
   await page.waitForTimeout(120);
+  await hideFlightBookHudForLegacyVisual(page);
   const fallback = await snapshot(page);
   expect(fallback.rooms.every((room) => room.archetype === 'procedural')).toBe(true);
   const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });

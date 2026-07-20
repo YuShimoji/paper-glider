@@ -109,6 +109,11 @@ export interface WorldEncounterPhase {
   readonly commitSequence: number | null;
 }
 
+export interface WorldProceduralRoomProgress {
+  readonly sequence: number;
+  readonly familyId: ProceduralRoomPlan['familyId'];
+}
+
 interface Theme {
   wall: MeshStandardMaterial;
   accent: MeshStandardMaterial;
@@ -361,20 +366,33 @@ export class CorridorWorld {
   }
 
   getEncounterAtPlayer(playerZ: number): WorldEncounterPhase {
-    const candidate = this.segments
-      .filter((segment) => (
-        segment.group.position.z - ROOM_LENGTH / 2 <= playerZ &&
-        segment.group.position.z + ROOM_LENGTH / 2 > playerZ
-      ))
-      .sort((left, right) => (
-        Math.abs(left.group.position.z - playerZ) - Math.abs(right.group.position.z - playerZ)
-      ))[0];
+    const candidate = this.getSegmentAtPlayer(playerZ);
     return candidate
       ? {
           phase: candidate.plan.encounterPhase,
           commitSequence: candidate.plan.encounterCommitSequence,
         }
       : { phase: 'none', commitSequence: null };
+  }
+
+  getProceduralRoomAtPlayer(playerZ: number): WorldProceduralRoomProgress | null {
+    const candidate = this.getSegmentAtPlayer(playerZ);
+    return candidate
+      ? {
+          sequence: candidate.sequence,
+          familyId: candidate.plan.proceduralRoom.familyId,
+        }
+      : null;
+  }
+
+  getRingRoom(ring: FlightRing): WorldProceduralRoomProgress | null {
+    const candidate = this.segments.find((segment) => segment.rings.includes(ring));
+    return candidate
+      ? {
+          sequence: candidate.sequence,
+          familyId: candidate.plan.proceduralRoom.familyId,
+        }
+      : null;
   }
 
   setColliderDebugVisible(visible: boolean): void {
@@ -427,6 +445,17 @@ export class CorridorWorld {
   collect(ring: FlightRing): void {
     ring.collected = true;
     ring.mesh.visible = false;
+  }
+
+  private getSegmentAtPlayer(playerZ: number): RoomSegment | undefined {
+    return this.segments
+      .filter((segment) => (
+        segment.group.position.z - ROOM_LENGTH / 2 <= playerZ &&
+        segment.group.position.z + ROOM_LENGTH / 2 > playerZ
+      ))
+      .sort((left, right) => (
+        Math.abs(left.group.position.z - playerZ) - Math.abs(right.group.position.z - playerZ)
+      ))[0];
   }
 
   private recyclePassedRooms(speed: number): void {

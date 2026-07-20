@@ -52,6 +52,28 @@ import {
 import type { RunSeedSource, SeedStorage } from './simulation/RunSeed';
 import type { WorkbenchAssetLoadResult } from './assets/WorkbenchRoomAssetLoader';
 import type { RoomDiagnostic } from './CorridorWorld';
+import {
+  advanceFlightBookSimulation,
+  createFlightBookEvent,
+  createFlightBookState,
+  FLIGHT_BOOK_GOALS,
+  FLIGHT_BOOK_STYLES,
+  formatFlightBookGoalProgress,
+  getFlightBookStyle,
+  getTrackedFlightBookGoal,
+  loadFlightBookPersistentState,
+  persistFlightBookPersistentState,
+  reduceFlightBookState,
+  selectFlightBookStyle,
+  serializeFlightBookPersistentState,
+} from './simulation/FlightBook';
+import type {
+  FlightBookEventInput,
+  FlightBookFamilyId,
+  FlightBookState,
+  FlightBookStorage,
+  FlightBookStyleId,
+} from './simulation/FlightBook';
 
 interface DebugSnapshot extends GameSnapshot {
   player: { x: number; y: number; velocityX: number; velocityY: number; lift: number };
@@ -78,12 +100,15 @@ interface DebugSnapshot extends GameSnapshot {
   rooms: readonly RoomDiagnostic[];
   resources: ReturnType<CorridorWorld['getResourceDiagnostics']>;
   cleanLine: CleanLineState;
+  flightBook: FlightBookState;
 }
 
 interface GliderRig {
   root: Group;
   leftWing: Group;
   rightWing: Group;
+  paperMaterial: MeshStandardMaterial;
+  foldMaterial: MeshStandardMaterial;
 }
 
 declare global {
@@ -128,6 +153,8 @@ export class PaperGliderGame {
   private readonly glider: Group;
   private readonly leftWing: Group;
   private readonly rightWing: Group;
+  private readonly paperMaterial: MeshStandardMaterial;
+  private readonly foldMaterial: MeshStandardMaterial;
   private readonly dust: Points;
   private readonly dustPositions: Float32Array;
   private readonly scratch = new Vector3();
@@ -145,6 +172,15 @@ export class PaperGliderGame {
   private visibilityPaused = false;
   private contextLost = false;
   private readonly assetLoadResult: WorkbenchAssetLoadResult;
+  private readonly flightBookStorage: FlightBookStorage | null = getLocalStorage();
+  private flightBookState = createFlightBookState(
+    loadFlightBookPersistentState(this.flightBookStorage),
+  );
+  private flightBookRunSequence = -1;
+  private observedProceduralRoom: {
+    familyId: FlightBookFamilyId;
+    sequence: number;
+  } | null = null;
   private cleanLineState = createCleanLineState();
   private observedEncounter: {
     phase: ArchiveGateEncounterPhase;
@@ -173,6 +209,11 @@ export class PaperGliderGame {
   private readonly resultBonus: HTMLElement;
   private readonly runSeedLabels: HTMLElement[];
   private readonly cleanLineResult: HTMLElement;
+  private readonly flightBookLive: HTMLElement;
+  private readonly flightBookToast: HTMLElement;
+  private readonly flightBookToastStyle: HTMLElement;
+  private readonly flightBookRunUnlocks: HTMLElement[];
+  private readonly flightBookStyleButtons: HTMLButtonElement[];
 
   constructor(root: HTMLDivElement, assetLoadResult: WorkbenchAssetLoadResult) {
     this.root = root;
@@ -220,6 +261,13 @@ export class PaperGliderGame {
     this.boostChainValue = this.query('.boost-chain-value');
     this.resultBonus = this.query('.result-bonus');
     this.cleanLineResult = this.query('.clean-line-result');
+    this.flightBookLive = this.query('.flight-book-live');
+    this.flightBookToast = this.query('.flight-book-toast');
+    this.flightBookToastStyle = this.query('.flight-book-toast-style');
+    this.flightBookRunUnlocks = [...this.root.querySelectorAll<HTMLElement>('.flight-book-run-unlocks')];
+    this.flightBookStyleButtons = [
+      ...this.root.querySelectorAll<HTMLButtonElement>('.flight-book-style-button'),
+    ];
     this.runSeedLabels = [...this.root.querySelectorAll<HTMLElement>('.run-seed-value')];
 
     this.scene.background = new Color(0xb8c8b7);
@@ -233,6 +281,9 @@ export class PaperGliderGame {
     this.glider = gliderRig.root;
     this.leftWing = gliderRig.leftWing;
     this.rightWing = gliderRig.rightWing;
+    this.paperMaterial = gliderRig.paperMaterial;
+    this.foldMaterial = gliderRig.foldMaterial;
+    this.applyFlightBookStyle();
     this.scene.add(this.glider);
     this.world = new CorridorWorld(
       this.scene,
@@ -250,6 +301,12 @@ export class PaperGliderGame {
     this.input = new InputController(canvas);
     this.startButton.addEventListener('click', this.startRun);
     this.restartButton.addEventListener('click', this.startRun);
+    for (const button of this.flightBookStyleButtons) {
+      button.addEventListener('click', () => {
+        const styleId = button.dataset.flightBookStyle as FlightBookStyleId | undefined;
+        if (styleId) this.selectFlightBookStyle(styleId);
+      });
+    }
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.onGlobalKeyDown);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -257,6 +314,7 @@ export class PaperGliderGame {
     canvas.addEventListener('webglcontextrestored', this.onContextRestored);
 
     this.updateUi(this.model.getSnapshot());
+    this.updateFlightBookUi();
     this.updateSeedLabels();
     this.resize();
     this.clock.resume();
@@ -267,6 +325,19 @@ export class PaperGliderGame {
 
   private readonly startRun = (): void => {
     window.clearTimeout(this.hintTimer);
+    if (this.flightBookState.run.seed !== null && this.flightBookState.run.runSequence >= 0) {
+      this.dispatchFlightBookEvent({
+        type: 'restarted',
+        seed: this.flightBookState.run.seed,
+        runSequence: this.flightBookState.run.runSequence,
+      });
+    }
+    this.flightBookRunSequence += 1;
+    this.dispatchFlightBookEvent({
+      type: 'run-started',
+      seed: this.runSeed,
+      runSequence: this.flightBookRunSequence,
+    });
     this.model.start();
     this.bestAtLaunch = this.model.getSnapshot().best;
     this.world.reset(this.runSeed, 9.5);
@@ -280,6 +351,7 @@ export class PaperGliderGame {
     this.elapsed = 0;
     this.cleanLineState = reduceCleanLineState(this.cleanLineState, { type: 'reset' });
     this.observedEncounter = { phase: 'none', commitSequence: null };
+    this.observedProceduralRoom = null;
     this.updateCleanLineUi();
     this.resetDust();
     this.overlayShown = false;
@@ -288,6 +360,7 @@ export class PaperGliderGame {
     this.root.classList.add('is-playing');
     this.controlsHint.classList.add('is-visible');
     this.hintTimer = window.setTimeout(() => this.controlsHint.classList.remove('is-visible'), 5200);
+    this.updateFlightBookUi();
   };
 
   private readonly animate = (timestampMs: number): void => {
@@ -302,6 +375,9 @@ export class PaperGliderGame {
       type: 'tick',
       deltaSeconds,
     });
+    const priorNotification = this.flightBookState.notification.styleId;
+    this.flightBookState = advanceFlightBookSimulation(this.flightBookState, deltaSeconds);
+    if (priorNotification !== this.flightBookState.notification.styleId) this.updateFlightBookUi();
     this.input.update(deltaSeconds);
     if (this.input.consumeUnfoldRequest() && this.model.unfoldWings()) this.popWingsOpen();
     this.model.update(deltaSeconds, this.input.isFolding());
@@ -358,6 +434,7 @@ export class PaperGliderGame {
     this.camera.lookAt(this.camera.position.x * 0.16, 2.35, -11);
 
     this.world.update(deltaSeconds, snapshot.speed, this.elapsed);
+    this.syncFlightBookRoomProgress();
     this.syncCleanLinePhase();
     this.checkRingCollection();
     this.checkCollisions();
@@ -381,6 +458,7 @@ export class PaperGliderGame {
   private checkRingCollection(): void {
     for (const ring of this.world.getRings()) {
       if (!ringIntersects(this.glider.position, ring, this.scratch)) continue;
+      const room = this.world.getRingRoom(ring);
       this.world.collect(ring);
       if (ring.plan.encounterPhase === 'commit' && ring.plan.encounterCommitSequence !== null) {
         this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
@@ -391,7 +469,36 @@ export class PaperGliderGame {
       const snapshot = this.model.getSnapshot();
       const challengeBonus =
         snapshot.speedMultiplier >= 1.12 ? ring.plan.challengeBonus : 0;
-      if (this.model.collectRing(challengeBonus)) this.popScore();
+      if (this.model.collectRing(challengeBonus)) {
+        const ringId = `ring-${ring.plan.index}`;
+        this.dispatchFlightBookEvent({
+          type: 'ring-collected',
+          seed: this.runSeed,
+          runSequence: this.flightBookRunSequence,
+          roomSequence: ring.plan.sequence,
+          ringId,
+        });
+        if (challengeBonus > 0) {
+          this.dispatchFlightBookEvent({
+            type: 'line-bonus-awarded',
+            seed: this.runSeed,
+            runSequence: this.flightBookRunSequence,
+            roomSequence: ring.plan.sequence,
+            ringId,
+          });
+        }
+        if (room && room.familyId !== 'classic-room' && ring.plan.index === 0) {
+          this.dispatchFlightBookEvent({
+            type: 'family-guide-ring-collected',
+            seed: this.runSeed,
+            runSequence: this.flightBookRunSequence,
+            familyId: room.familyId,
+            roomSequence: room.sequence,
+            ringId,
+          });
+        }
+        this.popScore();
+      }
     }
   }
 
@@ -420,12 +527,18 @@ export class PaperGliderGame {
 
   private crash(message: string): void {
     if (!this.model.crash()) return;
+    this.dispatchFlightBookEvent({
+      type: 'crashed',
+      seed: this.runSeed,
+      runSequence: this.flightBookRunSequence,
+    });
     this.cleanLineState = reduceCleanLineState(this.cleanLineState, { type: 'crash' });
     this.updateCleanLineUi();
     this.input.setEnabled(false);
     this.root.classList.remove('is-playing');
     this.controlsHint.classList.remove('is-visible');
     this.gameoverCopy.textContent = message;
+    this.updateFlightBookUi();
   }
 
   private showGameover(snapshot: GameSnapshot): void {
@@ -462,10 +575,19 @@ export class PaperGliderGame {
       this.observedEncounter.phase === 'recovery' &&
       this.observedEncounter.commitSequence !== null
     ) {
+      const priorSerial = this.cleanLineState.resultSerial;
       this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
         type: 'recovery-exit',
         commitSequence: this.observedEncounter.commitSequence,
       });
+      if (this.cleanLineState.resultSerial > priorSerial) {
+        this.dispatchFlightBookEvent({
+          type: 'clean-line-awarded',
+          seed: this.runSeed,
+          runSequence: this.flightBookRunSequence,
+          commitSequence: this.observedEncounter.commitSequence,
+        });
+      }
     }
     if (current.phase !== 'none' && current.commitSequence !== null) {
       this.cleanLineState = reduceCleanLineState(this.cleanLineState, {
@@ -477,9 +599,124 @@ export class PaperGliderGame {
     this.observedEncounter = current;
   }
 
+  private syncFlightBookRoomProgress(): void {
+    const current = this.world.getProceduralRoomAtPlayer(this.glider.position.z);
+    const active = current && current.familyId !== 'classic-room'
+      ? { familyId: current.familyId, sequence: current.sequence }
+      : null;
+    if (
+      this.observedProceduralRoom
+      && (
+        active === null
+        || active.familyId !== this.observedProceduralRoom.familyId
+        || active.sequence !== this.observedProceduralRoom.sequence
+      )
+    ) {
+      this.dispatchFlightBookEvent({
+        type: 'family-exited',
+        seed: this.runSeed,
+        runSequence: this.flightBookRunSequence,
+        familyId: this.observedProceduralRoom.familyId,
+        roomSequence: this.observedProceduralRoom.sequence,
+      });
+    }
+    if (
+      active
+      && (
+        this.observedProceduralRoom === null
+        || active.familyId !== this.observedProceduralRoom.familyId
+        || active.sequence !== this.observedProceduralRoom.sequence
+      )
+    ) {
+      this.dispatchFlightBookEvent({
+        type: 'family-entered',
+        seed: this.runSeed,
+        runSequence: this.flightBookRunSequence,
+        familyId: active.familyId,
+        roomSequence: active.sequence,
+      });
+    }
+    this.observedProceduralRoom = active;
+  }
+
   private updateCleanLineUi(): void {
     this.cleanLineResult.classList.toggle('is-visible', this.cleanLineState.resultVisible);
     this.cleanLineResult.setAttribute('aria-hidden', String(!this.cleanLineState.resultVisible));
+  }
+
+  private dispatchFlightBookEvent(event: FlightBookEventInput): void {
+    const previousPersistent = serializeFlightBookPersistentState(this.flightBookState.persistent);
+    const next = reduceFlightBookState(this.flightBookState, createFlightBookEvent(event));
+    if (next === this.flightBookState) return;
+    this.flightBookState = next;
+    if (serializeFlightBookPersistentState(next.persistent) !== previousPersistent) {
+      persistFlightBookPersistentState(this.flightBookStorage, next.persistent);
+    }
+    this.updateFlightBookUi();
+  }
+
+  private selectFlightBookStyle(styleId: FlightBookStyleId): void {
+    const next = selectFlightBookStyle(this.flightBookState, styleId);
+    if (next === this.flightBookState) return;
+    this.flightBookState = next;
+    persistFlightBookPersistentState(this.flightBookStorage, next.persistent);
+    this.applyFlightBookStyle();
+    this.updateFlightBookUi();
+  }
+
+  private applyFlightBookStyle(): void {
+    const style = getFlightBookStyle(this.flightBookState.persistent.selectedStyleId);
+    this.paperMaterial.color.setHex(style.paperColor);
+    this.foldMaterial.color.setHex(style.foldColor);
+    this.root.dataset.flightBookStyle = style.id;
+  }
+
+  private updateFlightBookUi(): void {
+    for (const goal of FLIGHT_BOOK_GOALS) {
+      const completed = this.flightBookState.persistent.completedGoalIds.includes(goal.id);
+      for (const element of this.root.querySelectorAll<HTMLElement>(
+        `.flight-book-goal[data-flight-book-goal="${goal.id}"]`,
+      )) {
+        element.classList.toggle('is-complete', completed);
+        element.querySelector<HTMLElement>('.flight-book-goal-state')!.textContent = completed
+          ? 'Complete'
+          : 'In progress';
+        element.querySelector<HTMLElement>('.flight-book-goal-progress')!.textContent = completed
+          ? `Reward · ${getFlightBookStyle(goal.rewardStyleId).label}`
+          : formatFlightBookGoalProgress(goal.id, this.flightBookState.run);
+      }
+    }
+
+    for (const button of this.flightBookStyleButtons) {
+      const styleId = button.dataset.flightBookStyle as FlightBookStyleId;
+      const unlocked = this.flightBookState.persistent.unlockedStyleIds.includes(styleId);
+      const selected = this.flightBookState.persistent.selectedStyleId === styleId;
+      button.disabled = !unlocked;
+      button.classList.toggle('is-locked', !unlocked);
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+      button.setAttribute('aria-label', `${getFlightBookStyle(styleId).label}${unlocked ? '' : ' locked'}`);
+    }
+
+    const tracked = getTrackedFlightBookGoal(this.flightBookState);
+    this.flightBookLive.textContent = tracked
+      ? `Flight Book · ${tracked.title} · ${formatFlightBookGoalProgress(tracked.id, this.flightBookState.run)}`
+      : `Flight Book · Collection complete · ${getFlightBookStyle(this.flightBookState.persistent.selectedStyleId).label}`;
+
+    const newStyles = this.flightBookState.run.newlyUnlockedStyleIds
+      .filter((styleId): styleId is Exclude<FlightBookStyleId, 'default'> => styleId !== 'default')
+      .map((styleId) => getFlightBookStyle(styleId).label);
+    for (const label of this.flightBookRunUnlocks) {
+      label.textContent = newStyles.length > 0 ? `New fold · ${newStyles.join(', ')}` : 'No new folds this flight';
+      label.classList.toggle('has-unlock', newStyles.length > 0);
+    }
+
+    const noticeStyle = this.flightBookState.notification.styleId;
+    this.flightBookToast.classList.toggle('is-visible', noticeStyle !== null);
+    this.flightBookToast.setAttribute('aria-hidden', String(noticeStyle === null));
+    this.flightBookToastStyle.textContent = noticeStyle
+      ? getFlightBookStyle(noticeStyle).label
+      : '';
   }
 
   private updateWingVisual(snapshot: GameSnapshot): void {
@@ -568,7 +805,13 @@ export class PaperGliderGame {
     });
     root.position.set(0, 2.35, 0.62);
     root.scale.setScalar(0.72);
-    return { root, leftWing: leftWingGroup, rightWing: rightWingGroup };
+    return {
+      root,
+      leftWing: leftWingGroup,
+      rightWing: rightWingGroup,
+      paperMaterial: paper,
+      foldMaterial: fold,
+    };
   }
 
   private triangleMesh(vertices: number[], material: MeshStandardMaterial): Mesh {
@@ -634,6 +877,10 @@ export class PaperGliderGame {
   private readonly onGlobalKeyDown = (event: KeyboardEvent): void => {
     const snapshot = this.model.getSnapshot();
     if ((event.key === 'Enter' || event.key === ' ') && snapshot.mode !== 'playing') {
+      if (
+        event.target instanceof HTMLButtonElement
+        && !event.target.matches('.start-button, .restart-button')
+      ) return;
       event.preventDefault();
       this.startRun();
     }
@@ -744,6 +991,7 @@ export class PaperGliderGame {
           rooms: this.world.getRoomDiagnostics(),
           resources: this.world.getResourceDiagnostics(),
           cleanLine: this.cleanLineState,
+          flightBook: this.flightBookState,
         };
       },
       aimAtNextRing: () => {
@@ -817,6 +1065,52 @@ export class PaperGliderGame {
     return element;
   }
 
+  private createFlightBookPanel(surface: 'start' | 'result'): string {
+    const goals = FLIGHT_BOOK_GOALS.map((goal) => `
+      <article class="flight-book-goal" data-flight-book-goal="${goal.id}">
+        <div class="flight-book-goal-heading">
+          <strong>${goal.title}</strong>
+          <span class="flight-book-goal-state">In progress</span>
+        </div>
+        <p>${goal.condition}</p>
+        <small class="flight-book-goal-progress">0</small>
+      </article>
+    `).join('');
+    const styles = FLIGHT_BOOK_STYLES.map((style) => {
+      const paper = style.paperColor.toString(16).padStart(6, '0');
+      const fold = style.foldColor.toString(16).padStart(6, '0');
+      return `
+        <button
+          class="flight-book-style-button"
+          type="button"
+          data-flight-book-style="${style.id}"
+          style="--fold-paper:#${paper};--fold-accent:#${fold}"
+          aria-pressed="false"
+        >
+          <span class="flight-book-style-swatch" aria-hidden="true"></span>
+          <span>${style.label}</span>
+        </button>
+      `;
+    }).join('');
+    return `
+      <aside class="flight-book-panel flight-book-panel-${surface}" aria-label="Local Flight Book">
+        <div class="flight-book-heading">
+          <div>
+            <span>Local collection</span>
+            <h2>Flight Book</h2>
+          </div>
+          <b aria-hidden="true">S1</b>
+        </div>
+        <div class="flight-book-goals">${goals}</div>
+        <div class="flight-book-style-selector" aria-label="Paper fold style">
+          <span>Paper fold</span>
+          <div>${styles}</div>
+        </div>
+        ${surface === 'result' ? '<p class="flight-book-run-unlocks">No new folds this flight</p>' : ''}
+      </aside>
+    `;
+  }
+
   private createMarkup(): string {
     return `
       <main class="game-shell" aria-label="Paper Glider game">
@@ -866,52 +1160,69 @@ export class PaperGliderGame {
           <strong>CLEAN LINE</strong>
         </div>
 
+        <div class="flight-book-live" aria-live="polite">Flight Book</div>
+
+        <div class="flight-book-toast" role="status" aria-live="polite" aria-hidden="true">
+          <span>New fold</span>
+          <strong class="flight-book-toast-style"></strong>
+        </div>
+
         <section class="overlay start-overlay is-visible" aria-labelledby="game-title">
           <div class="start-card">
-            <p class="eyebrow">An endless afternoon</p>
-            <h1 class="title" id="game-title">Paper <span>Glider</span></h1>
-            <p class="intro">Thread the sunlit rooms, skim the furniture, and catch every golden ring.</p>
-            <div class="control-guide">
-              <div class="control-row">
-                <span class="control-icon" aria-hidden="true">&#8598;</span>
-                <span>Guide with pointer or drag</span>
+            <div class="overlay-card-layout">
+              <div class="overlay-card-primary">
+                <p class="eyebrow">An endless afternoon</p>
+                <h1 class="title" id="game-title">Paper <span>Glider</span></h1>
+                <p class="intro">Thread the sunlit rooms, skim the furniture, and catch every golden ring.</p>
+                <div class="control-guide">
+                  <div class="control-row">
+                    <span class="control-icon" aria-hidden="true">&#8598;</span>
+                    <span>Guide with pointer or drag</span>
+                  </div>
+                  <div class="control-row">
+                    <span class="control-icon hold-icon" aria-hidden="true"></span>
+                    <span>Hold either button to tuck + boost</span>
+                  </div>
+                  <div class="control-row">
+                    <span class="control-icon double-icon" aria-hidden="true">&#8226;&#8226;</span>
+                    <span>Double click / tap to open</span>
+                  </div>
+                </div>
+                <p class="run-seed">Run seed <strong class="run-seed-value">--------</strong></p>
+                <button class="primary-button start-button" type="button">Take flight</button>
               </div>
-              <div class="control-row">
-                <span class="control-icon hold-icon" aria-hidden="true"></span>
-                <span>Hold either button to tuck + boost</span>
-              </div>
-              <div class="control-row">
-                <span class="control-icon double-icon" aria-hidden="true">&#8226;&#8226;</span>
-                <span>Double click / tap to open</span>
-              </div>
+              ${this.createFlightBookPanel('start')}
             </div>
-            <p class="run-seed">Run seed <strong class="run-seed-value">--------</strong></p>
-            <button class="primary-button start-button" type="button">Take flight</button>
           </div>
         </section>
 
         <section class="overlay gameover-overlay" aria-labelledby="gameover-title">
           <div class="gameover-card">
-            <p class="eyebrow">Flight complete</p>
-            <h2 class="gameover-title" id="gameover-title">Caught a corner.</h2>
-            <p class="gameover-copy">The room was smaller than it looked.</p>
-            <div class="result-strip">
-              <div class="result-cell">
-                <span class="score-label">Rings</span>
-                <strong class="result-score">00</strong>
+            <div class="overlay-card-layout">
+              <div class="overlay-card-primary">
+                <p class="eyebrow">Flight complete</p>
+                <h2 class="gameover-title" id="gameover-title">Caught a corner.</h2>
+                <p class="gameover-copy">The room was smaller than it looked.</p>
+                <div class="result-strip">
+                  <div class="result-cell">
+                    <span class="score-label">Rings</span>
+                    <strong class="result-score">00</strong>
+                  </div>
+                  <div class="result-cell">
+                    <span class="score-label">Best</span>
+                    <strong class="result-best">00</strong>
+                  </div>
+                  <div class="result-cell">
+                    <span class="score-label">Line</span>
+                    <strong class="result-bonus">00</strong>
+                  </div>
+                </div>
+                <p class="run-seed">Run seed <strong class="run-seed-value">--------</strong></p>
+                <p class="new-best">New best flight</p>
+                <button class="primary-button restart-button" type="button">Fly again</button>
               </div>
-              <div class="result-cell">
-                <span class="score-label">Best</span>
-                <strong class="result-best">00</strong>
-              </div>
-              <div class="result-cell">
-                <span class="score-label">Line</span>
-                <strong class="result-bonus">00</strong>
-              </div>
+              ${this.createFlightBookPanel('result')}
             </div>
-            <p class="run-seed">Run seed <strong class="run-seed-value">--------</strong></p>
-            <p class="new-best">New best flight</p>
-            <button class="primary-button restart-button" type="button">Fly again</button>
           </div>
         </section>
       </main>

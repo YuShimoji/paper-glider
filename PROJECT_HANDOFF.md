@@ -4,13 +4,107 @@ This is the durable restart and supervising-AI entrypoint. Read it with `README.
 
 ## Current conclusion
 
-**PUBLISHED_WITH_DETERMINISTIC_ROOM_SET_V1**
+**LOCAL_FLIGHT_BOOK_V1_TECHNICALLY_ACCEPTED — PUBLICATION_PENDING**
+
+PG-S1 Local Flight Book v1 is technically accepted at exact runtime candidate `52f48ecad3088f0c58f03f9a72722fc26799be27` on `codex/local-flight-book-v1`. Its detached clean-worktree package, unit, build, full Playwright, visual-regression, production-preview, asset, rights, and diff gates are green. The focused branch has not yet been pushed or integrated at this checkpoint, so this status is deliberately not `PUBLISHED_WITH_LOCAL_FLIGHT_BOOK_V1`.
+
+PG-S1 adds three local goals and three cosmetic paper folds without changing flight physics, Rings, Best, Line bonus, CLEAN LINE, collisions, room selection, ring generation, Archive Gate, or Pages ownership. Progress is driven by deterministic versioned run events through a pure reducer; unlocks and the selected fold use one bounded versioned localStorage record. The start/result overlays and one-line in-flight progress fit the fixed desktop/mobile viewports, and production still exposes no debug API.
+
+Publication completion requires: focused-branch push, guarded non-rewriting main integration, exact-main GitHub CI, exact-main legacy Pages, Pages API confirmation, and public fixed-seed readback including one canonical unlock plus style-selection/reload persistence. Until those are green, the published game remains the prior PG-A3 baseline described below.
 
 PG-A2 Archive Gate Flight Line and PG-A3 Deterministic Room Set v1 are published. PG-A3 was locally accepted at exact source commit `b97af97c26cd15e0a66910b6c77d320b1ce2b2db`, integrated without history rewriting at main merge `5a56f7152b5a73f379061e871a605c38783dc2b9`, passed the real GitHub CI and legacy Pages runs for that exact SHA, and passed a production fixed-seed public readback.
 
 PG-A3 adds two actually playable procedural families without changing flight physics or score semantics: Offset Gallery makes a left/right lane decision, and Split Loft makes an upper/lower lane decision. Their visual primitives, collision AABBs, safe lane, ring hints, reaction budget, and test label come from one immutable pure plan. A 48-seed × 5-speed × 72-room matrix and real Chromium collision checks are green.
 
 The automated and public PG-A3 gates are closed. Physical-phone touch, constrained-device performance, non-Chromium behavior, and 15–30 minute human game-feel acceptance remain explicitly open and are not implied by this status.
+
+## PG-S1 technical checkpoint
+
+### Git and authority state
+
+- Session start: `main` at expected `9dc6b20082a407aa8f05f45203d4d8607493cc2c`, `main...origin/main=0/0`, clean after `git fetch --prune origin`.
+- Start CI `29731523126`: success for exact `9dc6b20`.
+- Start legacy Pages `29731522321`: success for exact `9dc6b20`.
+- Start Pages API: `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`.
+- Start public canary `https://yushimoji.github.io/paper-glider/?seed=1BADB000`: document/assets HTTP 200, WebGL available, seed visible, production debug absent, console/page errors `0`.
+- Focused branch: `codex/local-flight-book-v1`.
+- Exact accepted runtime/build/test candidate: `52f48ecad3088f0c58f03f9a72722fc26799be27`.
+- At this checkpoint `origin/main` is still exactly `9dc6b20`; no unknown remote advance or user-owned worktree change was present.
+- Publication source remains legacy `main:/docs`; `.github/workflows/ci.yml` remains validation-only.
+- No PR, tag, release, force-push, backend, account, telemetry, external API, currency, shop, or external asset was introduced.
+
+### Goals, reducer, persistence, and style contracts
+
+`src/game/simulation/FlightBook.ts` is independent of Three.js, DOM, localStorage, rendering, and wall-clock time.
+
+| Goal | Canonical same-run requirement | Reward |
+| --- | --- | --- |
+| Ring Route | At least 8 `ring-collected` events and at least 1 `line-bonus-awarded` | Amber Kraft: warm kraft paper plus terracotta fold accent |
+| Clean Archive | One existing CLEAN LINE success transition propagated once as `clean-line-awarded` | Blueprint Fold: blue-gray paper plus light-blue fold accent |
+| Room Tour | For both Offset Gallery and Split Loft, same-sequence enter → guide ring → non-crash exit in one run | Sage Ledger: pale sage paper plus dark-green fold accent |
+
+- Event version: `flight-book-event-v1`.
+- Event IDs contain only deterministic seed, run sequence, event type, and the required room/commit/entity identity. Replaying an ID is idempotent; events for another run are ignored.
+- Supported lifecycle/event vocabulary: `run-started`, `ring-collected`, `line-bonus-awarded`, `family-entered`, `family-guide-ring-collected`, `family-exited`, `clean-line-awarded`, `crashed`, `run-ended`, and `restarted`.
+- Same initial state plus the same ordered event bytes produces byte-equivalent state. No `Date.now`, `performance.now`, `Math.random`, fetch ordering, async completion, UA, device identity, or render timing enters the reducer.
+- Run progress is memory-only and resets on a new run/restart. Partial progress cannot complete after crash/end; already completed goals remain durable. A missed family visit can be retried later in the same run.
+- Storage key: `paperGlider.flightBook.v1`; schema version `1`.
+- Persistent bytes contain only completed goal IDs, their derived unlocked style IDs, and the selected style. No event history, timestamps, UA, or full flight history is serialized.
+- Corrupt JSON, unknown versions/IDs, invalid selected styles, and storage read/write exceptions fail safely to the default Ivory state. Existing Best and run-seed keys are untouched.
+- Default Ivory is always available. Locked styles cannot be selected. Style changes update only the two existing glider materials; room/Gate/ring materials, lights, fog, tone mapping, collision, AABB, score, speed, and physics remain unchanged. No material is constructed per frame or per room.
+- Unlock notice lifetime is 3.2 seconds of explicit simulation delta. It and Flight Book event production freeze while hidden and resume without a wall-clock jump.
+
+### UI and runtime wiring
+
+- The start overlay contains a compact three-goal Flight Book and four-choice fold selector; locked choices are disabled but keep their unlock condition visible.
+- Flight uses one low-chrome progress line such as `Ring Route · 0/8 rings · 0/1 Line`; it does not cover the central playfield.
+- The result overlay shows completed goals, selectable unlocked folds, and folds earned in that run.
+- A short `NEW FOLD` notice announces only first unlocks. Existing reduced-motion CSS also suppresses its decorative motion.
+- Mouse, keyboard, and touch activation use native buttons. At 390×844 the start card remains inside the viewport and does not create page scrolling.
+- CLEAN LINE is not reimplemented: `PaperGliderGame` emits one Flight Book event only when the existing `ArchiveGateEncounter` result serial advances.
+- Offset/Split progress consumes the runtime room context and each room's first guide-ring collection; it does not alter the pure PG-A3 plan or ring order.
+- Production has no `window.__paperGliderDebug`; tests use only the existing DEV surface.
+
+### Exact-candidate acceptance evidence
+
+Detached exact worktree: `C:\Users\thank\AppData\Local\Temp\paper-glider-pgs1-52f48ec-validation-04`
+
+- `npm ci`: 165 packages, audit vulnerabilities `0`.
+- `npm ls --depth=0`: pass; Three `0.180.0`, Playwright `1.61.1`, Vitest `4.1.10`, Vite `7.3.6`, TypeScript `5.9.3`.
+- `npm run typecheck`: pass.
+- `npm run lint`: pass, zero warnings.
+- `npm test`: 10 files, 54 tests passed.
+- Flight Book long campaign: 48 seeds × 5 speeds × 72 rooms, 39,105 canonical events, finite and byte-replay deterministic.
+- Existing PG-A3 matrix remains 48 × 5 × 72 with 20,923 planned rings and zero impossible required paths; existing PG-1/PG-A2 matrices remain green.
+- `npm run build`: pass, 24 modules; HTML 1.04/0.59 kB gzip, CSS 17.84/4.68, app 70.66/21.49, Workbench loader 9.52/3.77, GLTFLoader 44.82/13.23, Three 532.06/134.59.
+- `npm run test:e2e`: 66 enumerated, 53 passed, 13 intentional mobile duplicates skipped, 0 failed.
+- `npm run test:visual`: 38 enumerated, 31 passed, 7 intentional mobile duplicates skipped, 0 failed.
+- Fourteen new named PG-S1 baselines cover start, live progress, NEW FOLD, three styles with Archive Gate/Offset Gallery/Split Loft, and result at 1280×720 and 390×844. All were inspected.
+- One existing mobile CLEAN LINE baseline was intentionally updated only after actual/expected/diff inspection: the new low-chrome live line moved CLEAN LINE above the stacked progress/control hints. No world or gameplay expectation changed.
+- The new desktop result baseline was updated after a reproduced crash-coast background race. Its fixture now freezes visibility, places room zero deterministically, and normalizes animation/camera before capture; an update run and a separate normal run both passed. No unexplained bulk baseline update was made.
+- A slow-run CLEAN LINE fixture race was fixed by pausing while positioning each phase, resuming for one canonical transition, and pausing after observation. The actual unlock/crash test explicitly resumes before steering into a wall. These changes are DEV-test only.
+- One earlier exact run ended without an assertion or Windows crash event and left only its Vite child alive; the owned process tree was stopped after command-line/PID verification. A fresh full run on the same SHA completed green, so it is recorded as a non-reproduced harness process exit, not a product pass/fail.
+- Formal acceptance npm operations were strictly serial. During early focused diagnosis only, one typecheck and lint invocation overlapped once; neither installed packages nor mutated artifacts.
+- `git diff --check`: pass. Exact and primary worktrees are tracked-clean at this checkpoint; generated `docs/` matches the accepted build.
+
+Exact-build preview: `http://127.0.0.1:5235/paper-glider/?seed=1BADB000` before the temporary preview was stopped.
+
+- Desktop 1280×720 and mobile 390×844: document, manifest, and GLB HTTP 200; correct `/paper-glider/` path; WebGL true; seed `1BADB000`; three goals and three locked reward styles; Take flight entered playing and exposed the one-line Flight Book progress.
+- Production debug API: `undefined`; console errors `0`; page errors `0`.
+- Mobile start card bounds: top `32.3`, bottom `811.7` in the 844 px viewport; document client/scroll height both `844`.
+- Preview port 5235 was stopped. Operator preview 4173 remains PID 23548 and was never changed.
+
+### Technical commit map
+
+| Commit | Kind | Purpose |
+| --- | --- | --- |
+| `58ee25f` | Implementation/test/visual | Pure reducer/storage/style definitions, canonical runtime events, compact UI, unit/E2E, and 14 new baselines |
+| `886ccc2` | Candidate docs/build | README and exact generated legacy-Pages `docs/` |
+| `00ec864` | Test-only stabilization | Freeze and step real CLEAN LINE phases deterministically on slow mobile runs |
+| `e639c54` | Test-only stabilization | Explicitly resume the real unlock route before its crash/result assertion |
+| `52f48ec` | Test-only visual stabilization | Fix result background timing and update the causally explained new desktop result baseline |
+
+The implementation/runtime candidate is `52f48ec`; the next commit is the PG-S1 technical handoff only. Push, main merge, real CI/Pages, public readback, and publication closeout are still pending at this checkpoint.
 
 ## Repository and publication state
 
@@ -63,7 +157,7 @@ The PG-A2 production readback succeeded before PG-A3 began:
 | `paper-glider-compat-manifest-v1.schema.json` | 9,028 | `abbd570b742de3ae87904069dfd0b27f26a0e223999e1cfa760dec81a26a4e39` |
 | `RIGHTS.md` | 2,657 | `481eb1980eb1728eefb84c6a5fb5bdf307185e99e7089e511e927ebf49958c9f` |
 
-PG-A3 uses no new external asset. The compatibility Packet, Archive Gate files, manifest/schema/RIGHTS, and Workbench are unchanged.
+PG-A3 and PG-S1 use no new external asset. The compatibility Packet, Archive Gate files, manifest/schema/RIGHTS, and Workbench are unchanged.
 
 ## PG-A3 active artifact
 
@@ -295,7 +389,7 @@ Ignored local dependencies, Playwright output, `.serena/`, the operator preview,
 
 ## Farthest safe roadmap
 
-1. **PG-S1 — Local Flight Book v1:** turn existing Rings, Line bonus, CLEAN LINE, and room-family passages into a small offline session arc with deterministic daily-independent challenges and visible paper rewards; no account/backend.
+1. **PG-V1 — Living Paper Flight Feedback v1:** add deterministic, simulation-driven paper wake, ring/Line capture flourishes, and room-passage feedback that make moment-to-moment flight more legible and expressive without changing scoring or physics.
 2. **PG-D1 — Device acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, constrained-device frame-time, thermal, and endurance evidence.
 3. **PG-RC — Release candidate:** accessibility, audio/settings, copy/privacy, final human balance, and release evidence.
 
@@ -330,55 +424,76 @@ If the primary checkout's dependency or test operation would disturb an owner pr
 ## Next Prompt
 
 ```text
-Paper GliderのPG-S1「Local Flight Book v1」を、公開済みDeterministic Room Set v1から連続する、遊びの目的と見た目の報酬が増える縦切りスライスとして実装してください。調査、focused branch、実装、検証、visual evidence、commit/push、technical green後のmain統合、実CI、legacy Pages、公開readback、PROJECT_HANDOFF.md更新まで、停止条件に該当しない限り自走してください。
+Paper GliderのPG-V1「Living Paper Flight Feedback v1」を、公開済みLocal Flight Book v1から連続する、飛行中の見た目と手応えが明確に増える縦切りスライスとして完成させてください。調査、focused branch、設計、実装、検証、visual evidence、意図的なcommit/push、technical green後のmain統合、実CI、legacy Pages、公開readback、PROJECT_HANDOFF.md更新まで、停止条件に該当しない限り自走してください。
 
 開始条件と正本:
-- 最初に最寄りのAGENTS.md、PROJECT_HANDOFF.md、README、package scripts、CI/Vite/Pages設定、GameModel、PaperGliderGame、RunSeed、RingPath、ProceduralRoomSet、ArchiveGateEncounter、既存E2E/visual規約を読む。
-- `main`をfetch後にread-onlyで確認し、clean、`HEAD...origin/main=0/0`、PG-A3 public canary `?seed=1BADB000`、実CI、legacy Pagesがgreenならfocused branch `codex/local-flight-book-v1`を作る。未知のadvanceや変更があれば停止する。
-- Workbench、Compatibility Packet、Archive Gate asset/manifest/schema/RIGHTS/Recipeはread-only。新規外部asset、権利推測、再生成、コピーを行わない。
-- 4173を含むユーザー所有processを停止しない。npm操作は直列化し、clean gateはexact-HEAD一時worktreeと専用portで行う。
+- 最初に最寄りのAGENTS.md、PROJECT_HANDOFF.md、README、package scripts、CI/Vite/Pages設定、GameModel、PaperGliderGame、FlightDynamics、RunSeed、RingPath、ProceduralRoomSet、ArchiveGateEncounter、FlightBook、既存E2E/visual規約を読む。
+- `main`をfetch後にread-onlyで確認し、clean、`HEAD...origin/main=0/0`、PROJECT_HANDOFFのPG-S1 final CI／legacy Pages、公開canary `?seed=1BADB000`がgreenであることを再確認する。未知のadvance、競合、未保存変更がある場合だけ停止する。
+- 条件成立後、focused branch `codex/living-paper-flight-feedback-v1`を作る。
+- Workbench、Compatibility Packet、Archive Gate GLB/manifest/schema/RIGHTS/Recipeはread-only。新規外部asset、権利推測、再生成、コピーを行わない。
+- operator-owned port 4173と既存processを停止・変更しない。npm操作は直列化し、clean gateはexact-HEADの専用worktreeと未使用portで行う。
 
-目的:
-1. 既存のRings、Line bonus、CLEAN LINE、Offset Gallery、Split Loft、Archive Gate通過を材料に、1回の短い飛行で理解できる3つのローカル目標を提示する「Flight Book」を追加する。
-2. 目標例は「指定数のRing」「高速Lineを含む」「CLEAN LINEまたは両family通過」のように既存ルールの組合せとし、新しいscore通貨を乱立させない。
-3. 同一seedとrun event列から目標進捗・達成・報酬を再現できるpure reducerを作る。Math.random、壁時計、日付、network、frame timingに依存しない。
-4. 達成報酬として、外部assetを使わない2～3種類の紙色／折り線accentをローカル解除し、開始画面で選択できるようにする。視認性、Gate/ring cue、collision debug色を損なわない。
-5. 目標panelは開始画面と結果画面の低chrome領域に置き、飛行中は小さな進捗だけにする。desktop/mobileの中央プレイフィールドを塞がない。
+プロダクト目的:
+1. 飛行中の速度、翼の格納／展開、ring取得、Line bonus、Offset Gallery／Split Loftのguide通過、CLEAN LINEを、紙らしい短い視覚フィードバックで読み取りやすくする。
+2. selected Flight Book styleの紙色／折り線accentを反映した、細い紙のwakeまたは折り線trailをglider後方へ出す。速度と翼状態から強さを決め、高速時でもplayfieldや次ringを隠さない。
+3. ring取得では小さな紙片／線のcapture flourish、Line bonusでは同じ語彙を少し強めたpulse、family guide→exitでは画面端の短いpassage markを出す。既存score、Rings、Line、Flight Book進捗を変更しない。
+4. CLEAN LINEは既存結果表示を尊重し、重複する大型bannerを増やさず、wake／accentの短い収束で成功感を補強する。
+5. 新しいmenu、管理画面、通貨、収集台帳は作らない。瞬間的なflight feedbackだけをこのスライスの価値にする。
+
+決定論／lifecycle契約:
+- effect発生をsimulation deltaと既存canonical transitionへ結び、Date.now、performance.now、Math.random、CSS wall-clock timer、network、render順へ依存させない。
+- 必要ならThree.js／DOMから独立したpure effect-event reducer／emitter planを作り、seed、run sequence、canonical event identityから同じspawn列・寿命・色役割を再生できるようにする。
+- hidden中はspawn、寿命、wake距離、pulse、passage markが一切進まず、復帰最初のframeでburstや巨大trailを作らない。
+- restart、新run、crash、context loss／restore、procedural fallbackでeffect poolを明示的にresetし、前runの紙片や通知を持ち越さない。
+- 同じevent IDの重複でcapture／Line／passage effectを二重発生させない。
+
+描画／資源契約:
+- 外部texture、font、audio、shader packageを追加せず、既存Three.jsとprocedural geometry/materialだけを使う。
+- wake、紙片、markは固定上限poolを持ち、per-frame allocation、無制限配列、roomごとのmaterial clone、restartごとのGPU resource増加を起こさない。
+- imported GLBおよび共有room/Gate/ring materialを直接mutateしない。effect専用resourceは一度だけ生成し、dispose境界をテストする。
+- selected styleはeffect paletteだけへ反映し、glider style本体と同様にsimulation、collision、room/ring planへ影響させない。
+- default、Amber Kraft、Blueprint Fold、Sage Ledgerの全styleでring、Gate cue、family safe lane、HUD文字とのコントラストを維持する。
+- reduced-motionではspawn数、移動距離、pulse scaleを大幅に抑えるが、ring／Line／passageの識別可能な静的または低動作cueは残す。
 
 維持契約:
-- seed replay、explicit delta、visibility freeze/resume、pointer/touch/keyboard、hold/double-open、flight physics、Rings、Best、Line bonus、CLEAN LINE、collision、restartを維持する。
-- PG-A3のfamily選択、2-room preview、pure AABB、3-room cadence、Archive Gate Approach/Commit/Recovery予約、Recovery後classic transition、fallback、recycling、shared resourcesを変更しない。
-- 解除状態はlocalStorageだけで完結し、login、backend、leaderboard、telemetry、広告、課金、外部APIを追加しない。保存schemaはversion付きで破損時に安全なdefaultへ戻す。
-- GitHub Pagesはlegacy `main:/docs`のまま。Actions deploymentへ移行しない。
+- PG-1のseed replay、explicit delta、visibility freeze/resume、入力、翼、physics、Rings、Best、Line bonus、collision、game over、restartを維持する。
+- PG-A2のArchive Gate、CLEAN LINE、fallback、shared resource lifetimeを維持する。
+- PG-A3のfamily cadence、2-room preview、pure AABB、ring route、Gate予約、Recovery後classic transitionを維持する。
+- PG-S1の3 goal、canonical event、dedupe、localStorage、style選択、start/result/live UIを維持する。effectのために進捗を水増ししない。
+- production debug APIを追加しない。login、backend、leaderboard、telemetry、analytics、課金、外部APIを追加しない。
+- GitHub Pagesはlegacy `main:/docs`のまま維持し、CI ActionsとPages deploymentを混同しない。
 
-必須実装:
-- pureなFlight Book definition/progress reducer、versioned local persistence、run reset/restart契約を追加する。
-- canary seedを一つ確定し、24 room以内で3目標を自動達成可能、かつOffset/Split/Gateが共存する証拠を作る。
-- 紙styleは既存procedural materialの共有contractを使い、per-frame/per-room material増殖を起こさない。
-- 目標達成は同一eventの重複で二重解除されず、visibility中に進まず、crash/restart境界が明示される。
+必須unit／resource検証:
+- same seed＋same explicit delta＋same event列でeffect plan／pool snapshotがbyte-equivalent。
+- different seedまたはdifferent styleで許可されたvisual variationが出るがsimulation snapshotは同一。
+- duplicate event、visibility、zero delta、resume rebase、restart、crash、run-ended、context loss、fallbackでfiniteかつ正しいreset。
+- 高速上限近傍、長時間、48 seeds × 5 speeds × 72 roomsでpool上限、active count、geometry/material identity、NaN/Infinity、event dedupeを検証する。
+- 既存PG-1／PG-A2／PG-A3／PG-S1 unitとmatrixをすべて維持する。
 
-必須検証:
-- same-seed/event replay、different-seed variation、重複event、保存破損、restart、visibility、fallback、全目標、全styleをunit testする。
-- 48 seed × 5 speed × 72 roomのPG-1/PG-A2/PG-A3行列を維持し、Flight Book reducerの長いevent列もfinite/deterministicに検証する。
-- Playwrightで開始→目標表示→Ring/Line/family/Gate/CLEAN進捗→達成→結果→style解除→選択→restart→永続化をdesktop 1280×720とmobile 390×844で検証する。
-- 各style、開始/結果panel、飛行中progress、PG-A3 roomとの共存をnamed visualに追加し、既存baselineは原因確認なしに更新しない。
-- exact commitのclean worktreeでnpm ci、npm ls、typecheck、lint、unit、build、全E2E/visualを実行し、production preview、実CI、legacy Pages、固定seed公開readback、console/page error 0を確認する。
-- git diff --check、staged review、secret scan、不要生成物、asset hash/rights、Recipe不在、Workbench不変、focused/main parityを確認する。
+必須E2E／visual:
+- 固定seed `1BADB000`を主canaryにし、実runtime input/event経路でwake、ring capture、Line、少なくとも一方のfamily passage、Archive Gate/CLEAN LINE、crash、restartを確認する。
+- hidden中のeffect snapshot不変と、復帰時のburst／delta spikeなしをPlaywrightで確認する。
+- style変更前後でsimulation snapshotが不変、effect paletteだけが変わることを確認する。
+- 1280×720と390×844でdefaultと3 reward styles、低速／高速、翼open／tucked、ring capture、family room、Archive Gate、result overlayとの同時表示をnamed visualにする。
+- 390×844の中央playfield、既存HUD、Flight Book live line、CLEAN LINE、start/restart操作を遮らない。
+- baseline差分はactual／expected／diffを目視し、原因不明の一括更新をしない。visual fixtureはsimulation pause／explicit deltaで固定し、新規wall-clock待ちを持ち込まない。
 
-禁止事項:
-- daily challengeを名乗りながら壁時計やserver時刻へ依存しない。
-- 新しい通貨、shop、account、cloud save、backend、telemetry、外部assetを追加しない。
-- flight physics、room fairness、Archive Gate/CLEAN LINEを目標達成の都合で緩めない。
-- UIを大型dashboard化せず、低chromeとプレイ視認性を維持する。
-- physical device、low-end、Firefox/WebKit、人間の楽しさを未確認のままpassと報告しない。
+検証と統合:
+- focused branch上で論理単位ごとにcommitする。
+- exact candidateのclean worktreeで `npm ci`、`npm ls --depth=0`、typecheck、lint、unit、build、full Playwright、visual regression、`git diff --check` を直列実行する。
+- production previewでdesktop/mobile、WebGL、subpath、manifest/GLB、console/page error 0、production debug不在、resource上限を確認する。
+- generated `docs/`がsourceと一致し、Recipe、secret、不要untracked、asset hash変更がないこと、Workbenchと4173が不変であることを確認する。
+- technical green後にfocused branchをpushし、origin/main不変をguardして履歴を改変せずmainへ統合する。PR、tag、release、force-pushは作成しない。
+- exact-main CIとlegacy Pagesをgreenにし、Pages APIが `status=built`、`build_type=legacy`、`source=main:/docs` のままであることを確認する。
+- 公開固定seedでwake、ring capture、最低1つのstyle palette、family/Gate共存、visibility、restart、WebGL、subpath、console/page error 0をreadbackする。公開greenの場合だけPUBLISHEDとする。
 
 停止条件:
-- 正本との矛盾、権利外assetが不可欠、Pages方式変更が不可避、現行主要挙動を維持できない衝突、認証/秘密/owner判断、未知のorigin advance。
-- 通常のtest failureや実装bugは停止条件ではない。原因調査、修正、再検証する。
+- 正本との矛盾、未知のorigin advance／user-owned変更、権利外assetが不可欠、Pages方式変更が不可避、主要simulationやPG-A2/A3/S1契約を維持できない設計衝突、認証／秘密／owner判断が必要、または外部障害でCI/Pages/public証拠を取得できない場合。
+- 通常のtest failure、visual差分、resource leak、実装bugは停止条件ではない。原因調査、修正、再検証する。
 
 完了報告:
-- 結論、開始/終了Git、commit/push、目標/reducer/persistence/style契約、unit/matrix/E2E/visual件数、production preview、CI/Pages/public URL、rights/Workbench不変を示す。
-- 自動確認とphysical device/low-end/non-Chromium/長時間human feelの未確認を分離する。
+- 結論を先頭に置き、開始／終了branch・HEAD・parity・worktree、commit map、effect契約、pool上限、unit/matrix/E2E/visual件数、production preview、CI/Pages/public URL、rights/Workbench不変を示す。
+- 自動確認済み事項と、physical iOS/Android、低性能端末、Firefox/WebKit、人間による15～30分の視認性・楽しさ・疲労感の未確認事項を分離する。
 - PROJECT_HANDOFF.mdを単独再開可能に更新し、次の見た目または遊びを拡張する完全な単一Promptを残す。
 ```
 
