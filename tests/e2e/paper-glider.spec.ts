@@ -227,6 +227,8 @@ async function prepareArchiveGateVisual(
     const debug = window.__paperGliderDebug;
     if (!debug) throw new Error('Debug API was not installed.');
     debug.restartWithSeed('1BADB068');
+    // Pooled room meshes can retain the preceding test's animation phase until the next world tick.
+    debug.normalizeVisualForTest();
     if (recycled) debug.advanceRoomsForTest(180);
     const sequence = recycled ? 13 : 4;
     if (recycled) {
@@ -1012,8 +1014,18 @@ test('@visual Sage Ledger with Split Loft', async ({ page }) => {
 test('@visual Flight Book result panel with all folds', async ({ page }) => {
   const errors = collectRuntimeErrors(page);
   await selectPersistedStyle(page, 'sage-ledger');
+  // Pause before starting so a slow runner cannot collect a ring on the way to the crash fixture.
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
   await startFlight(page);
-  await page.evaluate(() => window.__paperGliderDebug?.aimAtWall());
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    for (const room of debug.getSnapshot().rooms) {
+      debug.setRoomPositionForTest(room.sequence, -120 - room.sequence * 18);
+    }
+    debug.aimAtWall();
+    debug.setVisibilityForTest(false);
+  });
   await expect.poll(async () => (await snapshot(page)).mode, { timeout: 6_000 }).toBe('gameover');
   await expect(page.locator('.gameover-overlay')).toBeVisible();
   await page.evaluate(() => {
