@@ -210,7 +210,7 @@ The PG-A2 production readback succeeded before PG-A3 began:
 | `paper-glider-compat-manifest-v1.schema.json` | 9,028 | `abbd570b742de3ae87904069dfd0b27f26a0e223999e1cfa760dec81a26a4e39` |
 | `RIGHTS.md` | 2,657 | `481eb1980eb1728eefb84c6a5fb5bdf307185e99e7089e511e927ebf49958c9f` |
 
-PG-A3 and PG-S1 use no new external asset. The compatibility Packet, Archive Gate files, manifest/schema/RIGHTS, and Workbench are unchanged.
+PG-A3 and PG-S1 use no new external asset. The compatibility Packet and Paper Glider Archive Gate GLB/manifest/schema/RIGHTS bytes are unchanged. The Workbench remained read-only to this lane; its branch received the external docs-only advance recorded below during the long-running CI closeout.
 
 ## PG-A3 active artifact
 
@@ -413,7 +413,7 @@ Read-only Workbench: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkben
 - Start HEAD/upstream: `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`, parity `0/0`.
 - Start worktree: clean.
 - No Workbench fetch, checkout, install, build, generation, file edit, commit, or push was performed.
-- End readback: branch `codex/paper-glider-compat-v1`, HEAD/upstream `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`, parity `0/0`, clean.
+- End readback: branch `codex/paper-glider-compat-v1`, HEAD/upstream `c58ac302acee3e0dad0ce0d2ce89dc545cec241d`, parity `0/0`, clean. The only advance from the start SHA is external commit `c58ac30` (`docs: preserve cross-device Paper Glider handoff`); this Paper Glider lane did not create, fetch, checkout, edit, commit, or push it.
 
 ## Publication closeout
 
