@@ -513,9 +513,20 @@ test('freezes all run state while hidden and rebases the first resumed frame', a
   expect(stillPaused.nextRing).toEqual(paused.nextRing);
   expect(stillPaused.flightBook).toEqual(paused.flightBook);
 
-  await setDocumentHidden(page, false);
-  await page.waitForTimeout(80);
+  await page.evaluate(async () => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    // Observe exactly the first resumed simulation frame, not an arbitrary wall-clock window.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        resolve();
+      });
+    });
+  });
   const afterResume = await snapshot(page);
+  expect(afterResume.visibilityPaused).toBe(true);
   expect(afterResume.lastDeltaSeconds).toBeLessThanOrEqual(0.05);
   const resumedSimulationTime = afterResume.elapsed - paused.elapsed;
   expect(afterResume.distance - paused.distance).toBeLessThanOrEqual(
