@@ -31,6 +31,11 @@ interface DebugSnapshot {
     resultRemainingSeconds: number;
     resultSerial: number;
   };
+  resources: {
+    proceduralPrimitiveMeshes: number;
+    proceduralPrimitiveGeometries: number;
+    proceduralPrimitiveMaterials: number;
+  };
   rooms: Array<{
     sequence: number;
     archetype: 'procedural' | 'archive-gate';
@@ -39,6 +44,23 @@ interface DebugSnapshot {
     encounterPhase: 'none' | 'approach' | 'commit' | 'recovery';
     encounterCommitSequence: number | null;
     cueCount: number;
+    familyId: 'classic-room' | 'offset-gallery' | 'split-loft';
+    familyVariant: 'classic' | 'left-lane' | 'right-lane' | 'upper-lane' | 'lower-lane';
+    familyLabel: string;
+    familyPrimitiveCount: number;
+    safeLane: {
+      axis: 'horizontal' | 'vertical';
+      x: number;
+      y: number;
+      halfWidth: number;
+      halfHeight: number;
+    } | null;
+    reaction: {
+      obstacleZ: number;
+      earlyCueDistance: number;
+      minimumPreviewDistance: number;
+      minimumReactionTimeAtReferenceMaxSpeed: number;
+    } | null;
     rings: Array<{
       x: number;
       y: number;
@@ -53,6 +75,10 @@ const FLIGHT_LINE_SEED = '1BADB068';
 const FLIGHT_LINE_APPROACH = 3;
 const FLIGHT_LINE_COMMIT = 4;
 const FLIGHT_LINE_RECOVERY = 5;
+const ROOM_SET_SEED = '1BADB000';
+const SPLIT_LOFT_SEQUENCE = 2;
+const ROOM_SET_ARCHIVE_GATE_SEQUENCE = 8;
+const OFFSET_GALLERY_SEQUENCE = 11;
 
 async function snapshot(page: import('@playwright/test').Page): Promise<DebugSnapshot> {
   return page.evaluate(() => {
@@ -79,6 +105,47 @@ async function gotoFlightLine(page: import('@playwright/test').Page): Promise<vo
   await page.goto(`?seed=${FLIGHT_LINE_SEED}`);
   await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
   await expect.poll(async () => (await snapshot(page)).asset.status).toBe('loaded');
+}
+
+async function gotoRoomSet(page: import('@playwright/test').Page): Promise<void> {
+  await page.goto(`?seed=${ROOM_SET_SEED}`);
+  await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
+  await expect.poll(async () => (await snapshot(page)).asset.status).toBe('loaded');
+}
+
+async function prepareFamilyVisual(
+  page: import('@playwright/test').Page,
+  familyId: 'offset-gallery' | 'split-loft',
+  colliders = false,
+): Promise<void> {
+  await page.evaluate(({ familyId, colliders, offsetSequence, splitSequence }) => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.restartWithSeed('1BADB000');
+    if (familyId === 'offset-gallery') debug.advanceRoomsForTest(72);
+    debug.normalizeVisualForTest();
+    const sequence = familyId === 'offset-gallery' ? offsetSequence : splitSequence;
+    const rooms = debug.getSnapshot().rooms;
+    const room = rooms.find((candidate) => candidate.sequence === sequence);
+    if (!room || room.familyId !== familyId || room.rings.length < 2) {
+      throw new Error(`${familyId} visual room was unavailable.`);
+    }
+    for (const candidate of rooms) {
+      if (candidate.sequence !== sequence) {
+        debug.setRoomPositionForTest(candidate.sequence, -120 - candidate.sequence * 18);
+      }
+    }
+    debug.setRoomPositionForTest(sequence, -7.2);
+    debug.setFlightStateForTest(room.rings[0].x, room.rings[0].y);
+    debug.setColliderDebugVisible(colliders);
+    debug.setVisibilityForTest(true);
+  }, {
+    familyId,
+    colliders,
+    offsetSequence: OFFSET_GALLERY_SEQUENCE,
+    splitSequence: SPLIT_LOFT_SEQUENCE,
+  });
+  await page.waitForTimeout(120);
 }
 
 async function prepareArchiveGateVisual(
@@ -468,6 +535,98 @@ test('recycles the nine-room pool and recreates Archive Gate without refetch or 
   expect(errors).toEqual([]);
 });
 
+test('exposes the fixed room-set sequence with both families and Archive Gate', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await gotoRoomSet(page);
+  const initial = await snapshot(page);
+  expect(initial.runSeed).toBe(ROOM_SET_SEED);
+  expect(initial.rooms.find((room) => room.sequence === SPLIT_LOFT_SEQUENCE)).toMatchObject({
+    familyId: 'split-loft',
+    familyVariant: 'upper-lane',
+    encounterPhase: 'none',
+  });
+  expect(initial.rooms.find((room) => room.sequence === ROOM_SET_ARCHIVE_GATE_SEQUENCE)).toMatchObject({
+    archetype: 'archive-gate',
+    familyId: 'classic-room',
+    encounterPhase: 'commit',
+  });
+  expect(initial.rooms.find((room) => room.sequence === ROOM_SET_ARCHIVE_GATE_SEQUENCE - 1)).toMatchObject({
+    encounterPhase: 'approach',
+    familyId: 'classic-room',
+  });
+  expect(initial.resources).toMatchObject({
+    proceduralPrimitiveGeometries: 1,
+  });
+
+  await page.evaluate(() => window.__paperGliderDebug?.advanceRoomsForTest(72));
+  const recycled = await snapshot(page);
+  expect(recycled.rooms.find((room) => room.sequence === ROOM_SET_ARCHIVE_GATE_SEQUENCE + 1)).toMatchObject({
+    encounterPhase: 'recovery',
+    familyId: 'classic-room',
+  });
+  expect(recycled.rooms.find((room) => room.sequence === ROOM_SET_ARCHIVE_GATE_SEQUENCE + 2)).toMatchObject({
+    familyId: 'classic-room',
+  });
+  expect(recycled.rooms.find((room) => room.sequence === OFFSET_GALLERY_SEQUENCE)).toMatchObject({
+    familyId: 'offset-gallery',
+    familyVariant: 'left-lane',
+    encounterPhase: 'none',
+  });
+  expect(recycled.resources.proceduralPrimitiveGeometries).toBeLessThanOrEqual(1);
+  expect(recycled.resources.proceduralPrimitiveMaterials).toBeLessThanOrEqual(4);
+  expect(errors).toEqual([]);
+});
+
+for (const familyId of ['offset-gallery', 'split-loft'] as const) {
+  test(`${familyId} safe lane passes and planned AABB collides`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium-desktop', 'One deterministic collision proof is sufficient.');
+    const errors = collectRuntimeErrors(page);
+    await gotoRoomSet(page);
+    await page.evaluate(({ familyId, offsetSequence, splitSequence }) => {
+      const debug = window.__paperGliderDebug;
+      if (!debug) throw new Error('Debug API was not installed.');
+      debug.restartWithSeed('1BADB000');
+      debug.start();
+      if (familyId === 'offset-gallery') debug.advanceRoomsForTest(72);
+      const sequence = familyId === 'offset-gallery' ? offsetSequence : splitSequence;
+      const rooms = debug.getSnapshot().rooms;
+      const room = rooms.find((candidate) => candidate.sequence === sequence);
+      if (!room?.safeLane || !room.reaction) throw new Error(`${familyId} plan was unavailable.`);
+      for (const candidate of rooms) {
+        if (candidate.sequence !== sequence) {
+          debug.setRoomPositionForTest(candidate.sequence, -120 - candidate.sequence * 18);
+        }
+      }
+      debug.setFlightStateForTest(room.safeLane.x, room.safeLane.y);
+      debug.setRoomPositionForTest(sequence, 0.62 - room.reaction.obstacleZ);
+    }, { familyId, offsetSequence: OFFSET_GALLERY_SEQUENCE, splitSequence: SPLIT_LOFT_SEQUENCE });
+    await page.waitForTimeout(100);
+    expect((await snapshot(page)).mode).toBe('playing');
+    await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
+    expect((await snapshot(page)).rooms.some((room) => room.familyId === familyId)).toBe(true);
+
+    await page.evaluate(({ familyId, offsetSequence, splitSequence }) => {
+      const debug = window.__paperGliderDebug;
+      if (!debug) throw new Error('Debug API was not installed.');
+      const sequence = familyId === 'offset-gallery' ? offsetSequence : splitSequence;
+      const room = debug.getSnapshot().rooms.find((candidate) => candidate.sequence === sequence);
+      if (!room?.safeLane || !room.reaction) throw new Error(`${familyId} plan was unavailable.`);
+      const unsafeX = familyId === 'offset-gallery'
+        ? -Math.sign(room.safeLane.x) * 3.05
+        : 0;
+      const unsafeY = familyId === 'split-loft'
+        ? (room.familyVariant === 'upper-lane' ? 1 : 5)
+        : 2.35;
+      debug.setFlightStateForTest(unsafeX, unsafeY);
+      debug.setRoomPositionForTest(sequence, 0.62 - room.reaction.obstacleZ);
+      debug.setVisibilityForTest(false);
+    }, { familyId, offsetSequence: OFFSET_GALLERY_SEQUENCE, splitSequence: SPLIT_LOFT_SEQUENCE });
+    await expect.poll(async () => (await snapshot(page)).mode).toBe('gameover');
+    await expect(page.locator('.gameover-copy')).toContainText(familyId.replace('-', ' '));
+    expect(errors).toEqual([]);
+  });
+}
+
 test('times out asset preload and starts the procedural fallback', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop', 'One real-browser timeout proof is sufficient.');
   const errors = collectRuntimeErrors(page);
@@ -546,6 +705,65 @@ test('@visual Archive Gate after nine-room recycling', async ({ page }, testInfo
   expect(recycled.rooms.every((room) => room.sequence >= 9)).toBe(true);
   const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
   expect(captured).toMatchSnapshot('archive-gate-recycled.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual Offset Gallery room and safe lane', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'Offset Gallery overview uses the desktop camera.');
+  const errors = collectRuntimeErrors(page);
+  await gotoRoomSet(page);
+  await prepareFamilyVisual(page, 'offset-gallery');
+  expect((await snapshot(page)).rooms.find((room) => room.sequence === OFFSET_GALLERY_SEQUENCE)).toMatchObject({
+    familyId: 'offset-gallery',
+    familyVariant: 'left-lane',
+  });
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('offset-gallery.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual Offset Gallery planned collider overlay', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'Collider evidence uses the desktop camera.');
+  const errors = collectRuntimeErrors(page);
+  await gotoRoomSet(page);
+  await prepareFamilyVisual(page, 'offset-gallery', true);
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('offset-gallery-collider.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual Split Loft room and mobile portrait', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await gotoRoomSet(page);
+  await prepareFamilyVisual(page, 'split-loft');
+  expect((await snapshot(page)).rooms.find((room) => room.sequence === SPLIT_LOFT_SEQUENCE)).toMatchObject({
+    familyId: 'split-loft',
+    familyVariant: 'upper-lane',
+  });
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('split-loft.png', {
+    threshold: 0.22,
+    maxDiffPixelRatio: 0.012,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('@visual Split Loft planned collider overlay', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'Collider evidence uses the desktop camera.');
+  const errors = collectRuntimeErrors(page);
+  await gotoRoomSet(page);
+  await prepareFamilyVisual(page, 'split-loft', true);
+  const captured = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+  expect(captured).toMatchSnapshot('split-loft-collider.png', {
     threshold: 0.22,
     maxDiffPixelRatio: 0.012,
   });
