@@ -999,7 +999,18 @@ test('@visual Flight Book result panel with all folds', async ({ page }) => {
   await page.evaluate(() => window.__paperGliderDebug?.aimAtWall());
   await expect.poll(async () => (await snapshot(page)).mode, { timeout: 6_000 }).toBe('gameover');
   await expect(page.locator('.gameover-overlay')).toBeVisible();
-  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(true);
+    for (const room of debug.getSnapshot().rooms) {
+      debug.setRoomPositionForTest(
+        room.sequence,
+        room.sequence === 0 ? -7.2 : -120 - room.sequence * 18,
+      );
+    }
+    debug.normalizeVisualForTest();
+  });
   await expect(page.locator('.gameover-overlay .flight-book-goal.is-complete')).toHaveCount(3);
   await captureVisual(page, 'flight-book-result.png');
   expect(errors).toEqual([]);
