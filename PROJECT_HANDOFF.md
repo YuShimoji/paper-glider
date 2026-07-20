@@ -26,6 +26,7 @@ The automated and public PG-A3 gates are closed. Physical-phone touch, constrain
 - Main integration: merge `5a56f7152b5a73f379061e871a605c38783dc2b9`, pushed with `HEAD...origin/main=0/0` before this publication-closeout document.
 - Exact-main CI `29728420773`: success, https://github.com/YuShimoji/paper-glider/actions/runs/29728420773
 - Exact-main legacy Pages `29728420130`: success, https://github.com/YuShimoji/paper-glider/actions/runs/29728420130
+- Final E2E fixture stabilization: `fb311cd67e0cc69be067b8ddd60632a3e668a79e`, pushed; fix CI `29730942801` and legacy Pages `29730941756` succeeded for that exact SHA.
 - Pages API after publication: `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`.
 - Publication source must remain GitHub Pages legacy `main:/docs`. Validation CI does not deploy Pages.
 - No PR, tag, release, backend, login, leaderboard, telemetry, CDN, or Actions Pages deployment is part of PG-A3.
@@ -231,6 +232,15 @@ The temporary preview was stopped after verification. The operator-owned 4173 pr
 - Published manifest remained 7,345 bytes at SHA-256 `b9c41a053e97d061ac4795c77d8f628e93f0a40adef6f718614e614c861e1bd5`; GLB remained 30,172 bytes at SHA-256 `e91d1a4b87c2c0a7d3c6698c320c13239b3751c03884b3a4c6b5b6853be1d019`.
 - Inspected evidence is outside the repository at `C:\Users\thank\AppData\Local\Temp\paper-glider-pg-a3-public-readback-20260720-01`.
 
+### Final CI stabilization evidence
+
+- The first docs-only successor CI `29729898890` failed one existing mobile visual: `Flight Line Approach`. The other 35 executed tests passed and 10 platform-duplicate cases skipped as intended; all PG-A3 family tests passed.
+- The downloaded actual/diff evidence showed that the 5.2 s production controls hint had expired on the slow runner while the expected fixture still contained it. The retry then met the normal asset `loaded` poll at its former five-second boundary. This was a test-fixture/boot-wait race, not a public runtime or room-plan regression.
+- Baseline images were not updated. `tests/e2e/paper-glider.spec.ts` now restores the intended hint immediately before the Flight Line visual capture and allows one software-WebGL boot reload with an eight-second loaded wait.
+- Focused local verification on isolated port 5210: mobile `Flight Line Approach` repeated 5/5 pass; typecheck passed.
+- Fix commit `fb311cd67e0cc69be067b8ddd60632a3e668a79e`: CI `29730942801` success in 7m43s, including the full Browser/visual step; legacy Pages `29730941756` success.
+- Pages remained `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}` after the fix.
+
 ## Commit map
 
 PG-A3 focused implementation commits:
@@ -243,6 +253,8 @@ PG-A3 focused implementation commits:
 | `b97af97` | Deterministic QA | DEV-only synchronous collision proof and long-campaign boot stabilization |
 | `b6ee403` | Candidate docs/build | README, exact generated `docs/`, and pre-integration handoff |
 | `5a56f71` | Main merge | Non-rewriting integration of the focused branch; exact SHA accepted by CI and legacy Pages |
+| `b9a788d` | Docs-only closeout | Published-state handoff; its successor exposed the pre-existing mobile visual timer race |
+| `fb311cd` | E2E stabilization | Fixed the identified hint-timer and loaded-poll race without changing runtime or baselines |
 
 This publication closeout is a docs-only main commit after `5a56f71`. No PR, tag, or release was created.
 
@@ -266,6 +278,7 @@ Read-only Workbench: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkben
 6. Pages ownership remained legacy `main:/docs`.
 7. Public seed `1BADB000` passed family, Gate, ring, CLEAN LINE, collision, WebGL, asset, and runtime-error readback.
 8. This document records the closed publication gate and the remaining human/hardware boundaries.
+9. A docs-successor mobile visual race was diagnosed from actual/diff evidence, fixed without baseline changes, and revalidated by focused 5/5 plus full green CI.
 
 ## Evidence boundaries and residual work
 
