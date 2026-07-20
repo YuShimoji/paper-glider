@@ -643,6 +643,7 @@ test('unlocks Blueprint Fold through the real CLEAN LINE route and persists sele
   expect(unlocked.flightBook.run.cleanLineCount).toBe(1);
   await expect(page.locator('.flight-book-toast')).toContainText('Blueprint Fold');
 
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(false));
   await page.evaluate(() => window.__paperGliderDebug?.aimAtWall());
   await expect.poll(async () => (await snapshot(page)).mode, { timeout: 6_000 }).toBe('gameover');
   await expect(page.locator('.gameover-overlay')).toBeVisible();
