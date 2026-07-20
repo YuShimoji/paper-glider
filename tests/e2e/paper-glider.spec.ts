@@ -251,7 +251,7 @@ async function enterFlightLinePhase(
   page: import('@playwright/test').Page,
   phase: 'approach' | 'commit' | 'recovery',
 ): Promise<void> {
-  await page.evaluate(({ phase, approachSequence, commitSequence, recoverySequence }) => {
+  await page.evaluate(async ({ phase, approachSequence, commitSequence, recoverySequence }) => {
     const debug = window.__paperGliderDebug;
     if (!debug) throw new Error('Debug API was not installed.');
     debug.setVisibilityForTest(true);
@@ -276,15 +276,21 @@ async function enterFlightLinePhase(
     debug.setRoomPositionForTest(commitSequence, phase === 'commit' ? capturePosition : phase === 'approach' ? -18 : 18);
     debug.setRoomPositionForTest(recoverySequence, phase === 'recovery' ? capturePosition : -36);
     debug.setFlightStateForTest(ring.x, ring.y);
+    debug.setVisibilityForTest(false);
+    // One simulation frame is sufficient to enter the positioned phase; pause before it can advance again.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        debug.setVisibilityForTest(true);
+        resolve();
+      });
+    });
   }, {
     phase,
     approachSequence: FLIGHT_LINE_APPROACH,
     commitSequence: FLIGHT_LINE_COMMIT,
     recoverySequence: FLIGHT_LINE_RECOVERY,
   });
-  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(false));
-  await expect.poll(async () => (await snapshot(page)).cleanLine.phase).toBe(phase);
-  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
+  expect((await snapshot(page)).cleanLine.phase).toBe(phase);
 }
 
 async function completeCleanLine(page: import('@playwright/test').Page): Promise<void> {
