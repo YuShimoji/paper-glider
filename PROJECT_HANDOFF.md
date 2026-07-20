@@ -4,28 +4,32 @@ This is the durable restart and supervising-AI entrypoint. Read it with `README.
 
 ## Current conclusion
 
-**PG_A2_PUBLISHED_PG_A3_READY_FOR_MAIN**
+**PUBLISHED_WITH_DETERMINISTIC_ROOM_SET_V1**
 
-PG-A2 Archive Gate Flight Line is published and has a successful fixed-seed production readback. PG-A3 Deterministic Room Set v1 is implemented on `codex/deterministic-room-set-v1`, locally accepted at exact source commit `b97af97c26cd15e0a66910b6c77d320b1ce2b2db`, and ready for the guarded `main` integration gate.
+PG-A2 Archive Gate Flight Line and PG-A3 Deterministic Room Set v1 are published. PG-A3 was locally accepted at exact source commit `b97af97c26cd15e0a66910b6c77d320b1ce2b2db`, integrated without history rewriting at main merge `5a56f7152b5a73f379061e871a605c38783dc2b9`, passed the real GitHub CI and legacy Pages runs for that exact SHA, and passed a production fixed-seed public readback.
 
 PG-A3 adds two actually playable procedural families without changing flight physics or score semantics: Offset Gallery makes a left/right lane decision, and Split Loft makes an upper/lower lane decision. Their visual primitives, collision AABBs, safe lane, ring hints, reaction budget, and test label come from one immutable pure plan. A 48-seed × 5-speed × 72-room matrix and real Chromium collision checks are green.
 
-Main integration, PG-A3 GitHub CI, legacy Pages publication, and PG-A3 public fixed-seed readback are still pending at this checkpoint. Do not call PG-A3 published until those external gates are evidenced below.
+The automated and public PG-A3 gates are closed. Physical-phone touch, constrained-device performance, non-Chromium behavior, and 15–30 minute human game-feel acceptance remain explicitly open and are not implied by this status.
 
 ## Repository and publication state
 
 - Repository: https://github.com/YuShimoji/paper-glider
 - Public game: https://yushimoji.github.io/paper-glider/
 - PG-A2 fixed run: https://yushimoji.github.io/paper-glider/?seed=1BADB068
-- PG-A3 fixed run after publication: https://yushimoji.github.io/paper-glider/?seed=1BADB000
+- PG-A3 fixed run: https://yushimoji.github.io/paper-glider/?seed=1BADB000
 - Session start: `main` at `cbc494e52b00e855004fbf926ea3675af3cfbe16`, `HEAD...origin/main=0/0`, clean.
 - PG-A2 readback closeout: docs-only `34ecbb191351e8398043ecdbc152447980f13dcf` on `main`, pushed.
-- Focused branch: `codex/deterministic-room-set-v1` at `b97af97c26cd15e0a66910b6c77d320b1ce2b2db`, clean before the publication-document/generated-build commit.
-- Focused branch relative to `origin/main`: `0/4` at source acceptance.
-- `origin/main` remained `34ecbb191351e8398043ecdbc152447980f13dcf`; no unknown remote advance was present at the guarded integration check.
+- Focused branch: `codex/deterministic-room-set-v1` at `b6ee4038117e01f2324cb5a4014ad293ab9e0082`, pushed with `HEAD...upstream=0/0`.
+- Accepted source commit on that branch: `b97af97c26cd15e0a66910b6c77d320b1ce2b2db`; candidate documentation/generated build commit: `b6ee4038117e01f2324cb5a4014ad293ab9e0082`.
+- `origin/main` remained `34ecbb191351e8398043ecdbc152447980f13dcf` at the guarded integration check; no unknown remote advance was present.
+- Main integration: merge `5a56f7152b5a73f379061e871a605c38783dc2b9`, pushed with `HEAD...origin/main=0/0` before this publication-closeout document.
+- Exact-main CI `29728420773`: success, https://github.com/YuShimoji/paper-glider/actions/runs/29728420773
+- Exact-main legacy Pages `29728420130`: success, https://github.com/YuShimoji/paper-glider/actions/runs/29728420130
+- Pages API after publication: `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`.
 - Publication source must remain GitHub Pages legacy `main:/docs`. Validation CI does not deploy Pages.
 - No PR, tag, release, backend, login, leaderboard, telemetry, CDN, or Actions Pages deployment is part of PG-A3.
-- Operator-owned preview port 4173 and the unrelated app on port 5173 were not stopped or changed. PG-A3 automation used isolated ports 5199–5207.
+- Operator-owned preview port 4173 was not stopped or changed. An unrelated app observed on 5173 was not stopped; it later exited independently. PG-A3 automation used isolated ports 5199–5208.
 
 ## PG-A2 publication closeout
 
@@ -211,6 +215,22 @@ The temporary preview was stopped after verification. The operator-owned 4173 pr
 - No chunk-size warning.
 - `docs/` is the committed legacy Pages artifact and must match the accepted build.
 
+### Real CI, legacy Pages, and public production readback
+
+- Main merge SHA: `5a56f7152b5a73f379061e871a605c38783dc2b9`.
+- CI `29728420773`: success. Dependency install/tree, typecheck, lint, 41 unit tests, production build, full Chromium E2E/visual, and Playwright report upload all completed successfully.
+- Legacy Pages `29728420130`: success for the same SHA.
+- Pages API remained `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`. No Actions Pages workflow or publication-source migration was introduced.
+- Public URL: `https://yushimoji.github.io/paper-glider/?seed=1BADB000`.
+- Document, PG-A3 hashed bundle `index-IueVq9jV.js`, manifest, and GLB returned HTTP 200 from `/paper-glider/`.
+- WebGL was available at `1280×720`; seed label was `1BADB000`; production debug API was absent.
+- Capped-rAF readback followed the same 0.05 s maximum-delta rule as the game. It observed Split Loft at measured distance 50.19 m, Archive Gate at 150.83 m, visible `CLEAN LINE` at 189.18 m, and Offset Gallery at 216.37 m.
+- The safe public run ended at 236.74 m with Rings `12`, still playing and without a collision.
+- A separate normal-input public run deliberately crossed into the blocked side and produced `A offset gallery / left-lane brought this flight back to earth.`; this is public collision evidence, not a debug shortcut.
+- Console errors: `0`; page errors: `0` in both safe and collision runs.
+- Published manifest remained 7,345 bytes at SHA-256 `b9c41a053e97d061ac4795c77d8f628e93f0a40adef6f718614e614c861e1bd5`; GLB remained 30,172 bytes at SHA-256 `e91d1a4b87c2c0a7d3c6698c320c13239b3751c03884b3a4c6b5b6853be1d019`.
+- Inspected evidence is outside the repository at `C:\Users\thank\AppData\Local\Temp\paper-glider-pg-a3-public-readback-20260720-01`.
+
 ## Commit map
 
 PG-A3 focused implementation commits:
@@ -221,8 +241,10 @@ PG-A3 focused implementation commits:
 | `f5599ca` | Runtime | Shared procedural rendering, collision, diagnostics, long-recycle resource proof |
 | `fc6d528` | Browser/visual | Fixed-seed order, safe/collision tests, named desktop/mobile baselines, isolated E2E port |
 | `b97af97` | Deterministic QA | DEV-only synchronous collision proof and long-campaign boot stabilization |
+| `b6ee403` | Candidate docs/build | README, exact generated `docs/`, and pre-integration handoff |
+| `5a56f71` | Main merge | Non-rewriting integration of the focused branch; exact SHA accepted by CI and legacy Pages |
 
-The next focused commit should contain README, generated `docs/`, and this handoff checkpoint. No PR, tag, or release is required.
+This publication closeout is a docs-only main commit after `5a56f71`. No PR, tag, or release was created.
 
 ## Workbench non-mutation evidence
 
@@ -232,40 +254,37 @@ Read-only Workbench: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkben
 - Start HEAD/upstream: `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`, parity `0/0`.
 - Start worktree: clean.
 - No Workbench fetch, checkout, install, build, generation, file edit, commit, or push was performed.
-- Reconfirm the same branch/HEAD/parity/clean state at final closeout.
+- End readback: branch `codex/paper-glider-compat-v1`, HEAD/upstream `eb4493c8a5810d3b4bb1de11f23d8cb6a024a247`, parity `0/0`, clean.
 
-## Pending publication gate
+## Publication closeout
 
-Before changing this status to `PUBLISHED_WITH_DETERMINISTIC_ROOM_SET_V1`:
-
-1. Commit and push the focused branch; require parity `0/0`.
-2. Re-fetch `origin/main`; stop on unknown advance.
-3. Integrate without rewriting history or force-pushing; no PR is required.
-4. Rebuild and commit matching `docs/` if integration changes the tree.
-5. Push `main` and monitor actual CI and legacy Pages runs.
-6. Confirm Pages remains `main:/docs`, `build_type=legacy`.
-7. Read back public seed `1BADB000`: Split room 2, Approach 7, Commit 8, Recovery 9, classic transition 10, Offset room 11, ring route, collision behavior, WebGL, asset HTTP, no production debug API, console/page errors 0.
-8. Update this handoff with exact focused/main commits, run URLs, public evidence, end parity, and end Workbench state.
+1. Focused branch pushed at `b6ee403`, parity `0/0`.
+2. Guarded origin check found no unknown `main` advance.
+3. Main integrated at `5a56f71` without rebase, force-push, or rewritten history.
+4. Exact generated `docs/` was already part of the focused candidate and matched the detached accepted build.
+5. Exact-main CI and legacy Pages runs succeeded.
+6. Pages ownership remained legacy `main:/docs`.
+7. Public seed `1BADB000` passed family, Gate, ring, CLEAN LINE, collision, WebGL, asset, and runtime-error readback.
+8. This document records the closed publication gate and the remaining human/hardware boundaries.
 
 ## Evidence boundaries and residual work
 
 | Purpose | Effect | Requirements | State | Owner | Next move |
 | --- | --- | --- | --- | --- | --- |
-| PG-A3 public acceptance | Makes both families available to public players | Main CI, legacy Pages, fixed-seed public readback | Pending; local candidate green | Paper Glider implementation lane | Complete the guarded publication gate above |
+| PG-A3 public acceptance | Makes both families available to public players | Main CI, legacy Pages, fixed-seed public readback | Complete for automated/public Chromium scope | Paper Glider implementation lane | Preserve fixed seed and CI as regression authority |
 | Physical touch acceptance | Confirms hold/double-tap comfort, safe area, OS gesture competition, and orientation | Named current iOS Safari and Android Chrome devices with human notes | Not tested; touch emulation only | Human/operator | Run named-device protocol before device-complete claims |
 | Long-session game feel | Confirms family cadence, anticipation, challenge, and CLEAN LINE satisfaction | 15–30 minute human runs across fixed and random seeds | Mathematical/browser automation green; human feel pending | Human play reviewer | Record seed, duration, outcomes, crashes, and notes |
 | Low-end performance | Detects stalls, thermal throttling, memory pressure, and battery effects | Named constrained/physical hardware and p95/p99 frame-time evidence | Not measured | Performance lane + hardware owner | Profile the published room-set run |
 | Firefox/WebKit | Detects renderer, input, and lifecycle differences | Pinned non-visual projects and triage | Chromium only | QA lane | Add smoke coverage without redefining Chromium visual authority |
-| Asset rights | Preserves project-scoped public distribution authority | Pinned hashes and unchanged RIGHTS/Packet boundary | Confirmed unchanged locally; final Workbench readback pending | Paper Glider owner | Reconfirm at final closeout |
+| Asset rights | Preserves project-scoped public distribution authority | Pinned hashes and unchanged RIGHTS/Packet boundary | Confirmed unchanged locally and in public bytes; Workbench final readback green | Paper Glider owner | Preserve the current project-scoped license boundary |
 
 Ignored local dependencies, Playwright output, `.serena/`, the operator preview, and quarantined dependency directories outside the project are not publication artifacts and must not be deleted opportunistically.
 
 ## Farthest safe roadmap
 
-1. **PG-A3 publication:** focused push, guarded main integration, CI, legacy Pages, fixed-seed public readback.
-2. **PG-S1 — Local Flight Book v1:** turn existing Rings, Line bonus, CLEAN LINE, and room-family passages into a small offline session arc with deterministic daily-independent challenges and visible paper rewards; no account/backend.
-3. **PG-D1 — Device acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, constrained-device frame-time, thermal, and endurance evidence.
-4. **PG-RC — Release candidate:** accessibility, audio/settings, copy/privacy, final human balance, and release evidence.
+1. **PG-S1 — Local Flight Book v1:** turn existing Rings, Line bonus, CLEAN LINE, and room-family passages into a small offline session arc with deterministic daily-independent challenges and visible paper rewards; no account/backend.
+2. **PG-D1 — Device acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, constrained-device frame-time, thermal, and endurance evidence.
+3. **PG-RC — Release candidate:** accessibility, audio/settings, copy/privacy, final human balance, and release evidence.
 
 Pages ownership stays legacy `main:/docs` unless a later explicit publication decision changes it.
 
