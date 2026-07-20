@@ -252,7 +252,7 @@ async function enterFlightLinePhase(
   await page.evaluate(({ phase, approachSequence, commitSequence, recoverySequence }) => {
     const debug = window.__paperGliderDebug;
     if (!debug) throw new Error('Debug API was not installed.');
-    debug.setVisibilityForTest(false);
+    debug.setVisibilityForTest(true);
     const rooms = debug.getSnapshot().rooms;
     const sequence = phase === 'approach'
       ? approachSequence
@@ -280,11 +280,18 @@ async function enterFlightLinePhase(
     commitSequence: FLIGHT_LINE_COMMIT,
     recoverySequence: FLIGHT_LINE_RECOVERY,
   });
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(false));
   await expect.poll(async () => (await snapshot(page)).cleanLine.phase).toBe(phase);
   await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
 }
 
 async function completeCleanLine(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate((seed) => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(true);
+    debug.restartWithSeed(seed);
+  }, FLIGHT_LINE_SEED);
   await enterFlightLinePhase(page, 'approach');
   await expect.poll(async () => (await snapshot(page)).score).toBeGreaterThanOrEqual(1);
   await enterFlightLinePhase(page, 'commit');
@@ -292,10 +299,13 @@ async function completeCleanLine(page: import('@playwright/test').Page): Promise
   await enterFlightLinePhase(page, 'recovery');
   await expect.poll(async () => (await snapshot(page)).score).toBeGreaterThanOrEqual(3);
   await page.evaluate((recoverySequence) => {
-    window.__paperGliderDebug?.setVisibilityForTest(false);
-    window.__paperGliderDebug?.setRoomPositionForTest(recoverySequence, 10);
+    const debug = window.__paperGliderDebug;
+    debug?.setVisibilityForTest(true);
+    debug?.setRoomPositionForTest(recoverySequence, 10);
   }, FLIGHT_LINE_RECOVERY);
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(false));
   await expect.poll(async () => (await snapshot(page)).cleanLine.resultVisible).toBe(true);
+  await page.evaluate(() => window.__paperGliderDebug?.setVisibilityForTest(true));
 }
 
 async function completeFamilyRoom(
