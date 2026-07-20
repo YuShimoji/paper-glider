@@ -6,11 +6,11 @@ This is the durable restart and supervising-AI entrypoint. Read it with `README.
 
 **LOCAL_FLIGHT_BOOK_V1_TECHNICALLY_ACCEPTED — PUBLICATION_PENDING**
 
-PG-S1 Local Flight Book v1 is technically accepted at exact runtime candidate `52f48ecad3088f0c58f03f9a72722fc26799be27` on `codex/local-flight-book-v1`. Its detached clean-worktree package, unit, build, full Playwright, visual-regression, production-preview, asset, rights, and diff gates are green. The focused branch has not yet been pushed or integrated at this checkpoint, so this status is deliberately not `PUBLISHED_WITH_LOCAL_FLIGHT_BOOK_V1`.
+PG-S1 Local Flight Book v1 is technically accepted at exact source/test candidate `c4bbea284baa1758fd34c04231119f70572d4bd1` on `codex/local-flight-book-v1`; its runtime and generated Pages artifact remain the implementation accepted at `52f48ecad3088f0c58f03f9a72722fc26799be27`. The focused branch was pushed through the first technical handoff, integrated without rewriting at main merge `666741fbb4205d148094fa9632c02a67fc14933e`, and the legacy Pages build for that SHA succeeded. Its first exact-main validation CI exposed two visual-fixture timing races; both now have cause-specific test-only fixes, and the final detached clean-worktree package, unit, build, full Playwright, visual-regression, production-preview, asset, rights, and diff gates are green. The fixes are not yet reintegrated at this checkpoint, so this status is deliberately not `PUBLISHED_WITH_LOCAL_FLIGHT_BOOK_V1`.
 
 PG-S1 adds three local goals and three cosmetic paper folds without changing flight physics, Rings, Best, Line bonus, CLEAN LINE, collisions, room selection, ring generation, Archive Gate, or Pages ownership. Progress is driven by deterministic versioned run events through a pure reducer; unlocks and the selected fold use one bounded versioned localStorage record. The start/result overlays and one-line in-flight progress fit the fixed desktop/mobile viewports, and production still exposes no debug API.
 
-Publication completion requires: focused-branch push, guarded non-rewriting main integration, exact-main GitHub CI, exact-main legacy Pages, Pages API confirmation, and public fixed-seed readback including one canonical unlock plus style-selection/reload persistence. Until those are green, the published game remains the prior PG-A3 baseline described below.
+Publication completion requires: push the focused stabilization commits, guarded non-rewriting main reintegration, green exact-main GitHub CI, exact-main legacy Pages, Pages API confirmation, and public fixed-seed readback including one canonical unlock plus style-selection/reload persistence. Until those are green, PG-S1 is present in the public bundle but is not publication-accepted; the last fully closed baseline remains PG-A3.
 
 PG-A2 Archive Gate Flight Line and PG-A3 Deterministic Room Set v1 are published. PG-A3 was locally accepted at exact source commit `b97af97c26cd15e0a66910b6c77d320b1ce2b2db`, integrated without history rewriting at main merge `5a56f7152b5a73f379061e871a605c38783dc2b9`, passed the real GitHub CI and legacy Pages runs for that exact SHA, and passed a production fixed-seed public readback.
 
@@ -28,8 +28,10 @@ The automated and public PG-A3 gates are closed. Physical-phone touch, constrain
 - Start Pages API: `status=built`, `build_type=legacy`, `source={branch:main,path:/docs}`.
 - Start public canary `https://yushimoji.github.io/paper-glider/?seed=1BADB000`: document/assets HTTP 200, WebGL available, seed visible, production debug absent, console/page errors `0`.
 - Focused branch: `codex/local-flight-book-v1`.
-- Exact accepted runtime/build/test candidate: `52f48ecad3088f0c58f03f9a72722fc26799be27`.
-- At this checkpoint `origin/main` is still exactly `9dc6b20`; no unknown remote advance or user-owned worktree change was present.
+- Exact accepted source/test candidate: `c4bbea284baa1758fd34c04231119f70572d4bd1`; runtime/generated artifact candidate: `52f48ecad3088f0c58f03f9a72722fc26799be27`.
+- First non-rewriting main integration: `666741fbb4205d148094fa9632c02a67fc14933e`; at this checkpoint `main...origin/main=0/0`, clean, and no unknown remote advance or user-owned worktree change is present.
+- First merge CI `29769272861`: failed only the mobile `Flight Book one-line running progress` visual on the initial run and retry; 52 tests passed, 13 intentionally skipped, and no product assertion failed. Artifact evidence was downloaded before changing the fixture.
+- First merge legacy Pages `29769271943`: success for exact `666741f`.
 - Publication source remains legacy `main:/docs`; `.github/workflows/ci.yml` remains validation-only.
 - No PR, tag, release, force-push, backend, account, telemetry, external API, currency, shop, or external asset was introduced.
 
@@ -67,7 +69,7 @@ The automated and public PG-A3 gates are closed. Physical-phone touch, constrain
 
 ### Exact-candidate acceptance evidence
 
-Detached exact worktree: `C:\Users\thank\AppData\Local\Temp\paper-glider-pgs1-52f48ec-validation-04`
+Detached exact worktree: `C:\Users\thank\AppData\Local\Temp\paper-glider-pgs1-c4bbea2-validation-07`
 
 - `npm ci`: 165 packages, audit vulnerabilities `0`.
 - `npm ls --depth=0`: pass; Three `0.180.0`, Playwright `1.61.1`, Vitest `4.1.10`, Vite `7.3.6`, TypeScript `5.9.3`.
@@ -83,8 +85,12 @@ Detached exact worktree: `C:\Users\thank\AppData\Local\Temp\paper-glider-pgs1-52
 - One existing mobile CLEAN LINE baseline was intentionally updated only after actual/expected/diff inspection: the new low-chrome live line moved CLEAN LINE above the stacked progress/control hints. No world or gameplay expectation changed.
 - The new desktop result baseline was updated after a reproduced crash-coast background race. Its fixture now freezes visibility, places room zero deterministically, and normalizes animation/camera before capture; an update run and a separate normal run both passed. No unexplained bulk baseline update was made.
 - A slow-run CLEAN LINE fixture race was fixed by pausing while positioning each phase, resuming for one canonical transition, and pausing after observation. The actual unlock/crash test explicitly resumes before steering into a wall. These changes are DEV-test only.
+- CI `29769272861` showed that the progress fixture could continue simulating after its canonical ring event until a slow screenshot capture recycled room zero and sent the captured rooms offscreen. Commit `4a380f1` now pauses, restarts the fixed seed, positions the real room-zero ring, resumes for exactly one animation frame to emit the canonical event, then pauses again. A focused mobile repeat passed 5/5.
+- The subsequent exact-candidate visual run exposed a separate existing 5.2-second control-hint timer that could clear the manually restored `is-visible` class during a slow mobile capture. Commit `c4bbea2` pins the already-computed hint appearance inline in the three visual fixtures that intentionally show it. Progress, NEW FOLD, and Flight Line Approach passed 9/9 over three repeats, followed by the complete 31/7 visual suite. Runtime code and visual baselines were not changed by either stabilization.
 - One earlier exact run ended without an assertion or Windows crash event and left only its Vite child alive; the owned process tree was stopped after command-line/PID verification. A fresh full run on the same SHA completed green, so it is recorded as a non-reproduced harness process exit, not a product pass/fail.
 - Formal acceptance npm operations were strictly serial. During early focused diagnosis only, one typecheck and lint invocation overlapped once; neither installed packages nor mutated artifacts.
+- An earlier detached `validation-06` install was mistakenly treated as complete while its command still owned a live session; `npm ls` correctly exposed the incomplete/extraneous tree. That Temp worktree was abandoned in place and is not evidence. `validation-07` tracked its isolated `npm ci` to exit 0 before any later gate.
+- During process diagnosis, some Codex-hosted npm child processes were stopped after they were incorrectly assumed to belong to this task; logs later showed concurrent work in other workspaces. This was an execution-boundary mistake. No further external workspace process was touched, all later Paper Glider npm work was isolated/serialized, and no product or repository artifact was accepted from the affected period.
 - `git diff --check`: pass. Exact and primary worktrees are tracked-clean at this checkpoint; generated `docs/` matches the accepted build.
 
 Exact-build preview: `http://127.0.0.1:5235/paper-glider/?seed=1BADB000` before the temporary preview was stopped.
@@ -103,8 +109,11 @@ Exact-build preview: `http://127.0.0.1:5235/paper-glider/?seed=1BADB000` before 
 | `00ec864` | Test-only stabilization | Freeze and step real CLEAN LINE phases deterministically on slow mobile runs |
 | `e639c54` | Test-only stabilization | Explicitly resume the real unlock route before its crash/result assertion |
 | `52f48ec` | Test-only visual stabilization | Fix result background timing and update the causally explained new desktop result baseline |
+| `5b7868b` | Docs-only technical handoff | Record the first PG-S1 technical acceptance boundary |
+| `4a380f1` | Test-only CI stabilization | Freeze the canonical live-progress fixture after one real animation-frame event |
+| `c4bbea2` | Test-only visual stabilization | Pin the intentionally visible timed control hint in fixed visual fixtures |
 
-The implementation/runtime candidate is `52f48ec`; the next commit is the PG-S1 technical handoff only. Push, main merge, real CI/Pages, public readback, and publication closeout are still pending at this checkpoint.
+The implementation/runtime candidate remains `52f48ec`; the complete source/test candidate is `c4bbea2`. The first integration merge and legacy Pages run succeeded, while its CI exposed the fixture races above. Push/reintegration of the two fixes, a new exact-main green CI/Pages pair, public readback, and publication closeout are still pending at this checkpoint.
 
 ## Repository and publication state
 
