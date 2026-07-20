@@ -256,6 +256,7 @@ async function enterFlightLinePhase(
     if (!debug) throw new Error('Debug API was not installed.');
     debug.setVisibilityForTest(true);
     const rooms = debug.getSnapshot().rooms;
+    const scoreBefore = debug.getSnapshot().score;
     const sequence = phase === 'approach'
       ? approachSequence
       : phase === 'commit'
@@ -277,12 +278,25 @@ async function enterFlightLinePhase(
     debug.setRoomPositionForTest(recoverySequence, phase === 'recovery' ? capturePosition : -36);
     debug.setFlightStateForTest(ring.x, ring.y);
     debug.setVisibilityForTest(false);
-    // One simulation frame is sufficient to enter the positioned phase; pause before it can advance again.
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        debug.setVisibilityForTest(true);
-        resolve();
-      });
+    // Observe canonical state after game-loop callbacks, then pause on the first completed capture frame.
+    await new Promise<void>((resolve, reject) => {
+      let remainingFrames = 12;
+      const observeCapture = (): void => {
+        const current = debug.getSnapshot();
+        if (current.cleanLine.phase === phase && current.score > scoreBefore) {
+          debug.setVisibilityForTest(true);
+          resolve();
+          return;
+        }
+        remainingFrames -= 1;
+        if (remainingFrames <= 0) {
+          debug.setVisibilityForTest(true);
+          reject(new Error(`${phase} did not capture its positioned ring within 12 frames.`));
+          return;
+        }
+        requestAnimationFrame(observeCapture);
+      };
+      requestAnimationFrame(observeCapture);
     });
   }, {
     phase,
