@@ -76,6 +76,7 @@ interface DebugSnapshot extends GameSnapshot {
     cloneCount: number;
   };
   rooms: readonly RoomDiagnostic[];
+  resources: ReturnType<CorridorWorld['getResourceDiagnostics']>;
   cleanLine: CleanLineState;
 }
 
@@ -740,6 +741,7 @@ export class PaperGliderGame {
             ...assetMetrics,
           },
           rooms: this.world.getRoomDiagnostics(),
+          resources: this.world.getResourceDiagnostics(),
           cleanLine: this.cleanLineState,
         };
       },
