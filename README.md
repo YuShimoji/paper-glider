@@ -1,6 +1,6 @@
 # Paper Glider
 
-An endless, low-poly browser flying game built with Three.js, TypeScript, and Vite. Guide the paper airplane with the pointer, a touch drag, or the arrow/WASD keys; collect golden rings and fly the versioned Archive Gate's Approach → Commit → Recovery line.
+An endless, low-poly browser flying game built with Three.js, TypeScript, and Vite. Guide the paper airplane with the pointer, a touch drag, or the arrow/WASD keys; collect golden rings, choose horizontal and vertical safe lanes, and fly the versioned Archive Gate's Approach → Commit → Recovery line.
 
 **Play online:** https://yushimoji.github.io/paper-glider/
 
@@ -27,6 +27,8 @@ Runs use a persisted 32-bit seed. Add a hexadecimal `seed` query to replay or sh
 
 Use seed `1BADB068` to reproduce the full Flight Line in rooms 3–5: Approach cue, Archive Gate Commit, and Recovery. Its GLB and compatibility manifest are preloaded once from `import.meta.env.BASE_URL`, verified against pinned SHA-256 values, and reused across the nine-room recycling pool. The former `1BADB00F` room-0 canary remains a regression fixture, but runtime placement advances it to rooms 8–10 so a Gate never appears without an Approach. If preload, hash, structure, or parse acceptance fails, the run starts with procedural rooms and no encounter state. The asset is distributed under the Paper Glider project-scoped `LicenseRef-PaperGlider-Project-Asset`; see `public/assets/workbench/paper-glider-v1/RIGHTS.md`.
 
+Use seed `1BADB000` for Deterministic Room Set v1. Split Loft appears in room 2, the complete Archive Gate Flight Line spans rooms 7–9 with Commit in room 8, and Offset Gallery appears in room 11. Offset Gallery uses a large side partition and a left/right ring lane; Split Loft uses a floor or ceiling overhang and an upper/lower ring lane. Both families are selected from seed plus room sequence, use pure AABB collision plans, and begin steering cues two rooms before the obstacle. Flight physics and the existing Ring/Best/Line/CLEAN LINE rules are unchanged.
+
 ## Quality checks
 
 ```bash
@@ -37,7 +39,7 @@ npm run test:e2e
 npm run test:visual
 ```
 
-Vitest covers seed replay, explicit-delta flight, lifecycle timing, rewards, schema/hash/loader failures, Flight Line state, Archive Gate AABBs/recycling, and multi-seed reachability. Playwright covers the gameplay verbs, visibility pause/resume, high-speed flight, Approach/Commit/Recovery/CLEAN LINE, Gate collision/recycling/fallback, and fixed `1280x720` / `390x844` screenshots. GitHub Actions runs the same validation suite and does not own Pages deployment.
+Vitest covers seed replay, explicit-delta flight, lifecycle timing, rewards, schema/hash/loader failures, Flight Line state, Archive Gate AABBs/recycling, both procedural families, and multi-seed reachability. Playwright covers the gameplay verbs, visibility pause/resume, high-speed flight, fixed room order, family safe lanes/collision, Approach/Commit/Recovery/CLEAN LINE, Gate collision/recycling/fallback, and fixed `1280x720` / `390x844` screenshots. GitHub Actions runs the same validation suite and does not own Pages deployment.
 
 The best score and most recent run seed are stored in the browser with `localStorage`. Procedural rooms, furniture layouts, paper texture, curtains, pages, and dust are created at runtime; the approved Archive Gate GLB/manifest is versioned inside this repository and requires no external CDN or API.
 
