@@ -18,6 +18,27 @@ PG-A3 adds two actually playable procedural families without changing flight phy
 
 The automated and public PG-S1 gates are closed. Physical-phone touch, constrained-device performance, non-Chromium behavior, and 15–30 minute human game-feel acceptance remain explicitly open and are not implied by this status.
 
+## 2026-07-23 development-readiness refresh
+
+This refresh re-entered the repository without starting PG-V1. `git fetch --prune origin` confirmed that `main` still pointed to `48520ba62c417102552354a177406512b662e3b0`, with `HEAD...origin/main=0/0` and a clean worktree. The latest exact-head CI `29783436873` and legacy Pages run `29783436100` remained successful, the Pages API remained `status=built`, `build_type=legacy`, `source=main:/docs`, and the public canary returned HTTP 200. No newer remote implementation of PG-V1 exists, so the current Next Prompt remains the correct next feature slice.
+
+The external npm advisory database had changed since the prior closeout. A fresh `npm ci` found one high-severity transitive development vulnerability, `fast-uri` advisory `GHSA-v2hh-gcrm-f6hx`, through root dev dependency `ajv`. The accepted maintenance candidate changes only the lockfile resolution from `fast-uri 3.1.3` to patched `3.1.4`; `package.json`, production TypeScript/CSS, assets, generated `docs/`, and runtime bytes are unchanged. `npm audit --audit-level=high` is now green with zero vulnerabilities.
+
+The first independent visual-only run on the original fixture exposed two automation failures after a preceding long software-WebGL campaign: the first mobile canvas showed a lost WebGL context, and the one-line progress fixture paused in its first rAF before the game-loop callback collected its positioned ring. Actual/expected/diff and the failure screenshot were inspected; no baseline or runtime was changed. Test-only stabilization now reloads only a newly lost test-page context once and observes the canonical `ringCount === 1` transition for at most 12 animation frames before pausing.
+
+Exact maintenance candidate `704a66edadbfa29bb81d5fedbcc1efb91850e5bb` was validated in `C:\Users\thank\AppData\Local\Temp\paper-glider-sync-704a66e-validation-03`:
+
+- `npm ci`: 165 packages; audit 0.
+- `npm ls --depth=0`, typecheck, lint, and `git diff --check`: pass.
+- Unit: 10 files / 54 tests passed.
+- Focused mobile visual repeat: 10/10 passed.
+- Independent visual run: 31 passed / 7 intentional skips / 0 failed; no baseline update.
+- Full Playwright: 53 passed / 13 intentional skips / 0 failed.
+- Build: 24 modules; generated `docs/` unchanged from the published runtime.
+- Production preview at desktop 1280×720 and mobile 390×844: `/paper-glider/`, manifest and GLB HTTP 200, seed and Flight Book UI present, production debug undefined, console/page errors 0. Mobile WebGL was live immediately and retained `clientHeight=scrollHeight=844`; after the long local software-WebGL campaigns, the desktop's first context was lost and a single fresh-page reload recovered it. This is retained as a constrained automation/context-loss residual for PG-D1 rather than claimed as physical-device evidence.
+
+Maintenance focused branch: `codex/dev-readiness-refresh-2026-07-23`. Candidate commits before this handoff update are `9222c8b` (lockfile-only advisory repair) and `704a66e` (test-only visual context/canonical-frame stabilization). No gameplay, scoring, physics, room, ring, Gate, Flight Book, public asset, or visual baseline semantics changed.
+
 ## PG-S1 technical checkpoint
 
 ### Git and authority state
@@ -443,8 +464,12 @@ Ignored local dependencies, Playwright output, `.serena/`, the operator preview,
 ## Farthest safe roadmap
 
 1. **PG-V1 — Living Paper Flight Feedback v1:** add deterministic, simulation-driven paper wake, ring/Line capture flourishes, and room-passage feedback that make moment-to-moment flight more legible and expressive without changing scoring or physics.
-2. **PG-D1 — Device acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, constrained-device frame-time, thermal, and endurance evidence.
-3. **PG-RC — Release candidate:** accessibility, audio/settings, copy/privacy, final human balance, and release evidence.
+2. **PG-D1 — Device and renderer acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, context-loss/restore, constrained-device frame-time, thermal, memory, and endurance evidence. This is the first mandatory human/hardware gate after PG-V1.
+3. **PG-A11Y — Accessible flight controls and feedback:** keyboard/focus review, reduced-motion equivalence, contrast, readable result/progress announcements, and user-selectable visual/audio intensity without changing the deterministic simulation.
+4. **PG-P1 — Performance and resilience budget:** establish named desktop/mobile budgets for frame time, draw calls, GPU resources, restart/recycle stability, and asset/context recovery, then enforce the automatable subset in CI.
+5. **PG-RC — Release candidate:** copy/privacy, settings, supported-browser declaration, final human balance, rights/asset hashes, rollback artifact, and owner acceptance bound to exact public bytes.
+6. **PG-1.0 — Owner-gated release baseline:** tag or release only after the owner explicitly approves the exact RC and all mandatory device evidence; preserve legacy Pages ownership unless separately authorized.
+7. **PG-C1 — Evidence-led post-release expansion:** only after real player/device review, choose one bounded content slice such as an additional room family, Flight Book volume, or flight-feedback refinement. Do not infer this scope before PG-RC evidence identifies the highest-value gap.
 
 Pages ownership stays legacy `main:/docs` unless a later explicit publication decision changes it.
 
@@ -459,6 +484,7 @@ node --version
 npm --version
 npm ci
 npm ls --depth=0
+npm audit --audit-level=high
 npm run typecheck
 npm run lint
 npm run test
@@ -484,7 +510,8 @@ Paper GliderのPG-V1「Living Paper Flight Feedback v1」を、公開済みLocal
 - `main`をfetch後にread-onlyで確認し、clean、`HEAD...origin/main=0/0`、PROJECT_HANDOFFのPG-S1 final CI／legacy Pages、公開canary `?seed=1BADB000`がgreenであることを再確認する。未知のadvance、競合、未保存変更がある場合だけ停止する。
 - 条件成立後、focused branch `codex/living-paper-flight-feedback-v1`を作る。
 - Workbench、Compatibility Packet、Archive Gate GLB/manifest/schema/RIGHTS/Recipeはread-only。新規外部asset、権利推測、再生成、コピーを行わない。
-- operator-owned port 4173と既存processを停止・変更しない。npm操作は直列化し、clean gateはexact-HEADの専用worktreeと未使用portで行う。
+- port 4173にlistenerがある場合はoperator-ownedとして扱い、既存processを停止・変更しない。npm操作は直列化し、clean gateはexact-HEADの専用worktreeと未使用portで行う。
+- `npm audit --audit-level=high`を開始gateへ含め、現在のlockfileが`fast-uri 3.1.4`を解決してaudit 0になることを確認する。advisoryを理由に無関係なmajor dependency更新へ広げない。
 
 プロダクト目的:
 1. 飛行中の速度、翼の格納／展開、ring取得、Line bonus、Offset Gallery／Split Loftのguide通過、CLEAN LINEを、紙らしい短い視覚フィードバックで読み取りやすくする。
@@ -533,7 +560,7 @@ Paper GliderのPG-V1「Living Paper Flight Feedback v1」を、公開済みLocal
 
 検証と統合:
 - focused branch上で論理単位ごとにcommitする。
-- exact candidateのclean worktreeで `npm ci`、`npm ls --depth=0`、typecheck、lint、unit、build、full Playwright、visual regression、`git diff --check` を直列実行する。
+- exact candidateのclean worktreeで `npm ci`、`npm ls --depth=0`、`npm audit --audit-level=high`、typecheck、lint、unit、build、full Playwright、visual regression、`git diff --check` を直列実行する。
 - production previewでdesktop/mobile、WebGL、subpath、manifest/GLB、console/page error 0、production debug不在、resource上限を確認する。
 - generated `docs/`がsourceと一致し、Recipe、secret、不要untracked、asset hash変更がないこと、Workbenchと4173が不変であることを確認する。
 - technical green後にfocused branchをpushし、origin/main不変をguardして履歴を改変せずmainへ統合する。PR、tag、release、force-pushは作成しない。
@@ -545,7 +572,7 @@ Paper GliderのPG-V1「Living Paper Flight Feedback v1」を、公開済みLocal
 - 通常のtest failure、visual差分、resource leak、実装bugは停止条件ではない。原因調査、修正、再検証する。
 
 完了報告:
-- 結論を先頭に置き、開始／終了branch・HEAD・parity・worktree、commit map、effect契約、pool上限、unit/matrix/E2E/visual件数、production preview、CI/Pages/public URL、rights/Workbench不変を示す。
+- 結論を先頭に置き、開始／終了branch・HEAD・parity・worktree、commit map、effect契約、pool上限、unit/matrix/E2E/visual件数、dependency audit、production preview、CI/Pages/public URL、rights/Workbench不変を示す。
 - 自動確認済み事項と、physical iOS/Android、低性能端末、Firefox/WebKit、人間による15～30分の視認性・楽しさ・疲労感の未確認事項を分離する。
 - PROJECT_HANDOFF.mdを単独再開可能に更新し、次の見た目または遊びを拡張する完全な単一Promptを残す。
 ```
