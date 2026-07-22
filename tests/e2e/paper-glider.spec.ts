@@ -467,6 +467,14 @@ async function hideFlightBookHudForLegacyVisual(
   });
 }
 
+async function hasLiveWebGlContext(page: import('@playwright/test').Page): Promise<boolean> {
+  return page.locator('.game-canvas').evaluate((element) => {
+    const canvas = element as HTMLCanvasElement;
+    const context = canvas.getContext('webgl2');
+    return context !== null && !context.isContextLost();
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('?seed=1BADB002');
@@ -479,6 +487,13 @@ test.beforeEach(async ({ page }) => {
     await expect(startOverlay).toBeVisible({ timeout: 8_000 });
   }
   await page.waitForTimeout(350);
+  if (!(await hasLiveWebGlContext(page))) {
+    // Software WebGL can lose one fresh context between project campaigns; recycle only that page.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(startOverlay).toBeVisible({ timeout: 8_000 });
+    await expect.poll(() => hasLiveWebGlContext(page), { timeout: 8_000 }).toBe(true);
+    await page.waitForTimeout(350);
+  }
 });
 
 test('starts, tucks, double-opens, collects a ring, crashes, and restarts', async ({ page }) => {
@@ -966,11 +981,23 @@ test('@visual Flight Book one-line running progress', async ({ page }) => {
     debug.setRoomPositionForTest(0, 0.62 - ring.z - 0.35);
     debug.setFlightStateForTest(ring.x, ring.y);
     debug.setVisibilityForTest(false);
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        debug.setVisibilityForTest(true);
-        resolve();
-      });
+    await new Promise<void>((resolve, reject) => {
+      let remainingFrames = 12;
+      const observeCapture = (): void => {
+        if (debug.getSnapshot().flightBook.run.ringCount === 1) {
+          debug.setVisibilityForTest(true);
+          resolve();
+          return;
+        }
+        remainingFrames -= 1;
+        if (remainingFrames <= 0) {
+          debug.setVisibilityForTest(true);
+          reject(new Error('Room-zero progress ring was not captured within 12 frames.'));
+          return;
+        }
+        requestAnimationFrame(observeCapture);
+      };
+      requestAnimationFrame(observeCapture);
     });
   });
   await expect.poll(
