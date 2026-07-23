@@ -497,7 +497,7 @@ Read-only Workbench: `C:\Users\thank\Storage\Game Projects\CodexGameAssetWorkben
 
 | Purpose | Effect | Requirements | State | Owner | Next move |
 | --- | --- | --- | --- | --- | --- |
-| PG-A3 public acceptance | Makes both families available to public players | Main CI, legacy Pages, fixed-seed public readback | Complete for automated/public Chromium scope | Paper Glider implementation lane | Preserve fixed seed and CI as regression authority |
+| PG-V1 public acceptance | Makes deterministic Living Paper feedback available with the existing families and Gate | Main CI, legacy Pages, fixed-seed public readback | Complete for automated/public Chromium scope | Paper Glider implementation lane | Preserve fixed seed, pool/resource bounds, and CI as regression authority |
 | Physical touch acceptance | Confirms hold/double-tap comfort, safe area, OS gesture competition, and orientation | Named current iOS Safari and Android Chrome devices with human notes | Not tested; touch emulation only | Human/operator | Run named-device protocol before device-complete claims |
 | Long-session game feel | Confirms family cadence, anticipation, challenge, and CLEAN LINE satisfaction | 15–30 minute human runs across fixed and random seeds | Mathematical/browser automation green; human feel pending | Human play reviewer | Record seed, duration, outcomes, crashes, and notes |
 | Low-end performance | Detects stalls, thermal throttling, memory pressure, and battery effects | Named constrained/physical hardware and p95/p99 frame-time evidence | Not measured | Performance lane + hardware owner | Profile the published room-set run |
@@ -508,13 +508,14 @@ Ignored local dependencies, Playwright output, `.serena/`, the operator preview,
 
 ## Farthest safe roadmap
 
-1. **PG-V1 — Living Paper Flight Feedback v1:** add deterministic, simulation-driven paper wake, ring/Line capture flourishes, and room-passage feedback that make moment-to-moment flight more legible and expressive without changing scoring or physics.
-2. **PG-D1 — Device and renderer acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, context-loss/restore, constrained-device frame-time, thermal, memory, and endurance evidence. This is the first mandatory human/hardware gate after PG-V1.
-3. **PG-A11Y — Accessible flight controls and feedback:** keyboard/focus review, reduced-motion equivalence, contrast, readable result/progress announcements, and user-selectable visual/audio intensity without changing the deterministic simulation.
-4. **PG-P1 — Performance and resilience budget:** establish named desktop/mobile budgets for frame time, draw calls, GPU resources, restart/recycle stability, and asset/context recovery, then enforce the automatable subset in CI.
-5. **PG-RC — Release candidate:** copy/privacy, settings, supported-browser declaration, final human balance, rights/asset hashes, rollback artifact, and owner acceptance bound to exact public bytes.
-6. **PG-1.0 — Owner-gated release baseline:** tag or release only after the owner explicitly approves the exact RC and all mandatory device evidence; preserve legacy Pages ownership unless separately authorized.
-7. **PG-C1 — Evidence-led post-release expansion:** only after real player/device review, choose one bounded content slice such as an additional room family, Flight Book volume, or flight-feedback refinement. Do not infer this scope before PG-RC evidence identifies the highest-value gap.
+PG-V1 Living Paper Flight Feedback v1 is complete for the automated/public Chromium scope described above. The remaining safe sequence is:
+
+1. **PG-D1 — Device and renderer acceptance:** physical iOS/Android touch, Firefox/WebKit smoke, context-loss/restore, constrained-device frame-time, thermal, memory, and endurance evidence. This is the first mandatory human/hardware gate after PG-V1.
+2. **PG-A11Y — Accessible flight controls and feedback:** keyboard/focus review, reduced-motion equivalence, contrast, readable result/progress announcements, and user-selectable visual/audio intensity without changing the deterministic simulation.
+3. **PG-P1 — Performance and resilience budget:** establish named desktop/mobile budgets for frame time, draw calls, GPU resources, restart/recycle stability, and asset/context recovery, then enforce the automatable subset in CI.
+4. **PG-RC — Release candidate:** copy/privacy, settings, supported-browser declaration, final human balance, rights/asset hashes, rollback artifact, and owner acceptance bound to exact public bytes.
+5. **PG-1.0 — Owner-gated release baseline:** tag or release only after the owner explicitly approves the exact RC and all mandatory device evidence; preserve legacy Pages ownership unless separately authorized.
+6. **PG-C1 — Evidence-led post-release expansion:** only after real player/device review, choose one bounded content slice such as an additional room family, Flight Book volume, or flight-feedback refinement. Do not infer this scope before PG-RC evidence identifies the highest-value gap.
 
 Pages ownership stays legacy `main:/docs` unless a later explicit publication decision changes it.
 
