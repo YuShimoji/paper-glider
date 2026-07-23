@@ -58,6 +58,54 @@ interface DebugSnapshot {
       remainingSeconds: number;
     };
   };
+  flightFeedback: {
+    version: 'flight-feedback-event-v1';
+    seed: string;
+    runSequence: number;
+    active: boolean;
+    reducedMotion: boolean;
+    wakeSerial: number;
+    eventSerial: number;
+    wakeDistanceAccumulator: number;
+    processedEventIds: string[];
+    wake: Array<{
+      active: boolean;
+      x: number;
+      y: number;
+      z: number;
+      rotation: number;
+      age: number;
+      life: number;
+      scaleX: number;
+      scaleY: number;
+    }>;
+    events: Array<{
+      active: boolean;
+      kind: 'capture-shard' | 'line-pulse' | 'passage-mark' | 'clean-convergence';
+      x: number;
+      y: number;
+      z: number;
+      velocityX: number;
+      velocityY: number;
+      velocityZ: number;
+      rotation: number;
+      spin: number;
+      age: number;
+      life: number;
+      scale: number;
+    }>;
+  };
+  flightFeedbackResources: {
+    wakePoolCapacity: number;
+    eventPoolCapacity: number;
+    wakeMeshCount: number;
+    eventMeshCount: number;
+    geometryIds: string[];
+    materialIds: string[];
+    styleId: 'default' | 'amber-kraft' | 'blueprint-fold' | 'sage-ledger' | null;
+    wakeColor: number;
+    eventColor: number;
+  };
   resources: {
     proceduralPrimitiveMeshes: number;
     proceduralPrimitiveGeometries: number;
@@ -411,6 +459,31 @@ async function prepareFlightLineVisual(
   await hideFlightBookHudForLegacyVisual(page);
 }
 
+async function prepareLivingPaperVisual(
+  page: import('@playwright/test').Page,
+  styleId: 'default' | 'amber-kraft' | 'blueprint-fold' | 'sage-ledger',
+  type: 'ring-captured' | 'line-bonus' | 'family-passed' | 'clean-line',
+  speedMultiplier: number,
+  wingFold: number,
+): Promise<void> {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await selectPersistedStyle(page, styleId);
+  await page.evaluate(({ type, speedMultiplier, wingFold }) => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.restartWithSeed('1BADB000');
+    debug.normalizeVisualForTest();
+    for (const room of debug.getSnapshot().rooms) {
+      debug.setRoomPositionForTest(
+        room.sequence,
+        room.sequence === 0 ? -7.2 : -120 - room.sequence * 18,
+      );
+    }
+    debug.prepareFlightFeedbackVisualForTest(type, speedMultiplier, wingFold);
+  }, { type, speedMultiplier, wingFold });
+  await pinControlsHintForVisual(page);
+}
+
 async function pointerDown(
   page: import('@playwright/test').Page,
   pointerId: number,
@@ -523,11 +596,17 @@ test('starts, tucks, double-opens, collects a ring, crashes, and restarts', asyn
   await expect.poll(async () => (await snapshot(page)).wingFold).toBeLessThan(tucked);
 
   await page.evaluate(() => window.__paperGliderDebug?.aimAtWall());
-  await expect.poll(async () => (await snapshot(page)).mode, { timeout: 5_000 }).toBe('gameover');
+  // Software WebGL may advance fewer clamped simulation frames per wall-clock second.
+  await expect.poll(async () => (await snapshot(page)).mode, { timeout: 12_000 }).toBe('gameover');
+  expect((await snapshot(page)).flightFeedback.active).toBe(false);
   await expect(page.getByRole('button', { name: 'Fly again' })).toBeVisible();
   await page.getByRole('button', { name: 'Fly again' }).click();
   await expect.poll(async () => (await snapshot(page)).mode).toBe('playing');
-  expect((await snapshot(page)).score).toBe(0);
+  const restarted = await snapshot(page);
+  expect(restarted.score).toBe(0);
+  expect(restarted.flightFeedback.active).toBe(true);
+  expect(restarted.flightFeedback.eventSerial).toBe(0);
+  expect(restarted.flightFeedback.processedEventIds).toEqual([]);
   expect(errors).toEqual([]);
 });
 
@@ -547,6 +626,7 @@ test('freezes all run state while hidden and rebases the first resumed frame', a
   expect(stillPaused.player).toEqual(paused.player);
   expect(stillPaused.nextRing).toEqual(paused.nextRing);
   expect(stillPaused.flightBook).toEqual(paused.flightBook);
+  expect(stillPaused.flightFeedback).toEqual(paused.flightFeedback);
 
   await page.evaluate(async () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: false });
@@ -569,7 +649,95 @@ test('freezes all run state while hidden and rebases the first resumed frame', a
   );
   expect(afterResume.score).toBe(paused.score);
   expect(afterResume.flightBook.run.ringCount).toBe(paused.flightBook.run.ringCount);
+  expect(afterResume.flightFeedback.eventSerial).toBe(paused.flightFeedback.eventSerial);
+  expect(afterResume.flightFeedback.wakeSerial - paused.flightFeedback.wakeSerial).toBeLessThanOrEqual(1);
   expect(afterResume.mode).toBe('playing');
+  expect(errors).toEqual([]);
+});
+
+test('emits deterministic living-paper feedback from the real ring route', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await startFlight(page);
+  await expect.poll(
+    async () => page.evaluate(() => {
+      window.__paperGliderDebug?.aimAtNextRing();
+      return window.__paperGliderDebug?.getSnapshot().score ?? 0;
+    }),
+    { timeout: 12_000 },
+  ).toBeGreaterThan(0);
+  const captured = await snapshot(page);
+  expect(captured.flightFeedback.version).toBe('flight-feedback-event-v1');
+  expect(captured.flightFeedback.processedEventIds.some(
+    (eventId) => eventId.includes(':ring-captured:'),
+  )).toBe(true);
+  expect(captured.flightFeedback.eventSerial).toBeGreaterThan(0);
+  expect(captured.flightFeedbackResources).toMatchObject({
+    wakePoolCapacity: 24,
+    eventPoolCapacity: 24,
+    wakeMeshCount: 1,
+    eventMeshCount: 1,
+    styleId: 'default',
+  });
+  expect(errors).toEqual([]);
+});
+
+test('keeps effect simulation identical while styles change only renderer colors', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await selectPersistedStyle(page, 'default');
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    debug?.restartWithSeed('1BADB000');
+    debug?.prepareFlightFeedbackVisualForTest('clean-line', 1.36, 1);
+  });
+  const ivory = await snapshot(page);
+
+  await selectPersistedStyle(page, 'blueprint-fold');
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    debug?.restartWithSeed('1BADB000');
+    debug?.prepareFlightFeedbackVisualForTest('clean-line', 1.36, 1);
+  });
+  const blueprint = await snapshot(page);
+  expect(blueprint.flightFeedback).toEqual(ivory.flightFeedback);
+  expect(blueprint.flightFeedbackResources.eventColor).not.toBe(
+    ivory.flightFeedbackResources.eventColor,
+  );
+});
+
+test('clears pooled effects across WebGL context loss without replaying an event', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'One real WebGL context lifecycle proof is sufficient.');
+  const errors = collectRuntimeErrors(page);
+  await startFlight(page);
+  await page.evaluate(() => {
+    window.__paperGliderDebug?.prepareFlightFeedbackVisualForTest('line-bonus', 1.36, 1);
+  });
+  const before = await snapshot(page);
+  expect(before.flightFeedback.events.some(({ active }) => active)).toBe(true);
+  const lifecycleSupported = await page.locator('.game-canvas').evaluate((element) => {
+    const context = (element as HTMLCanvasElement).getContext('webgl2');
+    const extension = context?.getExtension('WEBGL_lose_context');
+    if (!extension) return false;
+    extension.loseContext();
+    window.setTimeout(() => extension.restoreContext(), 60);
+    return true;
+  });
+  test.skip(!lifecycleSupported, 'WEBGL_lose_context is unavailable.');
+  await expect.poll(
+    async () => (await snapshot(page)).flightFeedback.events.every(({ active }) => !active),
+  ).toBe(true);
+  await expect.poll(() => hasLiveWebGlContext(page), { timeout: 8_000 }).toBe(true);
+  const restored = await snapshot(page);
+  expect(restored.flightFeedbackResources.geometryIds).toEqual(
+    before.flightFeedbackResources.geometryIds,
+  );
+  expect(restored.flightFeedbackResources.materialIds).toEqual(
+    before.flightFeedbackResources.materialIds,
+  );
+  const serialBeforeReplay = restored.flightFeedback.eventSerial;
+  await page.evaluate(() => {
+    window.__paperGliderDebug?.prepareFlightFeedbackVisualForTest('line-bonus', 1.36, 1);
+  });
+  expect((await snapshot(page)).flightFeedback.eventSerial).toBe(serialBeforeReplay);
   expect(errors).toEqual([]);
 });
 
@@ -806,6 +974,7 @@ test('flies the central passage and collides with both manifest pier and top bea
 test('recycles the nine-room pool and recreates Archive Gate without refetch or reparse', async ({ page }) => {
   const errors = collectRuntimeErrors(page);
   await gotoFlightLine(page);
+  const initialFeedbackResources = (await snapshot(page)).flightFeedbackResources;
   await page.evaluate(() => window.__paperGliderDebug?.advanceRoomsForTest(180));
   const recycled = await snapshot(page);
   expect(recycled.rooms.every((room) => room.sequence >= 9)).toBe(true);
@@ -817,6 +986,12 @@ test('recycles the nine-room pool and recreates Archive Gate without refetch or 
     parseCount: 1,
     cloneCount: 2,
   });
+  expect(recycled.flightFeedbackResources.geometryIds).toEqual(
+    initialFeedbackResources.geometryIds,
+  );
+  expect(recycled.flightFeedbackResources.materialIds).toEqual(
+    initialFeedbackResources.materialIds,
+  );
   expect(errors).toEqual([]);
 });
 
@@ -956,6 +1131,9 @@ test('times out asset preload and starts the procedural fallback', async ({ page
   expect(fallback.rooms.every((room) => room.encounterPhase === 'none')).toBe(true);
   expect(fallback.cleanLine.phase).toBe('inactive');
   await startFlight(page);
+  const startedFallback = await snapshot(page);
+  expect(startedFallback.flightFeedback.active).toBe(true);
+  expect(startedFallback.flightFeedback.processedEventIds).toEqual([]);
   expect(errors).toEqual([]);
 });
 
@@ -1100,6 +1278,95 @@ test('@visual Flight Book result panel with all folds', async ({ page }) => {
   });
   await expect(page.locator('.gameover-overlay .flight-book-goal.is-complete')).toHaveCount(3);
   await captureVisual(page, 'flight-book-result.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Living Paper Ivory open-wing ring capture', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await prepareLivingPaperVisual(page, 'default', 'ring-captured', 1, 0);
+  const prepared = await snapshot(page);
+  expect(prepared.flightFeedback.wake.some(({ active }) => active)).toBe(true);
+  expect(prepared.flightFeedback.events.some(
+    ({ active, kind }) => active && kind === 'capture-shard',
+  )).toBe(true);
+  await captureVisual(page, 'living-paper-ivory-open-ring.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Living Paper Amber tucked high-speed Line pulse', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await prepareLivingPaperVisual(page, 'amber-kraft', 'line-bonus', 1.36, 1);
+  const prepared = await snapshot(page);
+  expect(prepared.flightFeedback.wake.some(({ active }) => active)).toBe(true);
+  expect(prepared.flightFeedback.events.some(
+    ({ active, kind }) => active && kind === 'line-pulse',
+  )).toBe(true);
+  await captureVisual(page, 'living-paper-amber-tucked-line.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Living Paper Blueprint CLEAN LINE through Archive Gate', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await selectPersistedStyle(page, 'blueprint-fold');
+  await prepareArchiveGateVisual(page, {}, true);
+  await page.evaluate(() => {
+    window.__paperGliderDebug?.prepareFlightFeedbackVisualForTest('clean-line', 1.24, 0.72);
+  });
+  await pinControlsHintForVisual(page);
+  expect((await snapshot(page)).flightFeedback.events.some(
+    ({ active, kind }) => active && kind === 'clean-convergence',
+  )).toBe(true);
+  await captureVisual(page, 'living-paper-blueprint-clean-gate.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Living Paper Sage room-family passage mark', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await selectPersistedStyle(page, 'sage-ledger');
+  await prepareFamilyVisual(page, 'split-loft', false, true);
+  await page.evaluate(() => {
+    window.__paperGliderDebug?.prepareFlightFeedbackVisualForTest('family-passed', 1.07, 0.25);
+  });
+  await pinControlsHintForVisual(page);
+  expect((await snapshot(page)).flightFeedback.events.some(
+    ({ active, kind }) => active && kind === 'passage-mark',
+  )).toBe(true);
+  await captureVisual(page, 'living-paper-sage-passage.png');
+  expect(errors).toEqual([]);
+});
+
+test('@visual Living Paper effects clear before the result overlay', async ({ page }) => {
+  const errors = collectRuntimeErrors(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await selectPersistedStyle(page, 'amber-kraft');
+  await startFlight(page);
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    debug?.prepareFlightFeedbackVisualForTest('line-bonus', 1.36, 1);
+    debug?.aimAtWall();
+    debug?.setVisibilityForTest(false);
+  });
+  await expect.poll(async () => (await snapshot(page)).mode, { timeout: 12_000 }).toBe('gameover');
+  await expect(page.locator('.gameover-overlay')).toBeVisible();
+  await page.evaluate(() => {
+    const debug = window.__paperGliderDebug;
+    if (!debug) throw new Error('Debug API was not installed.');
+    debug.setVisibilityForTest(true);
+    for (const room of debug.getSnapshot().rooms) {
+      debug.setRoomPositionForTest(
+        room.sequence,
+        room.sequence === 0 ? -7.2 : -120 - room.sequence * 18,
+      );
+    }
+    debug.normalizeVisualForTest();
+  });
+  const ended = await snapshot(page);
+  expect(ended.flightFeedback.active).toBe(false);
+  expect(ended.flightFeedback.wake.every(({ active }) => !active)).toBe(true);
+  expect(ended.flightFeedback.events.every(({ active }) => !active)).toBe(true);
+  await captureVisual(page, 'living-paper-result-reset.png');
   expect(errors).toEqual([]);
 });
 
