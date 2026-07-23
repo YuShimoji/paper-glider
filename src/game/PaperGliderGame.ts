@@ -74,6 +74,15 @@ import type {
   FlightBookStorage,
   FlightBookStyleId,
 } from './simulation/FlightBook';
+import {
+  createFlightFeedbackEvent,
+  FlightFeedbackSimulation,
+} from './simulation/FlightFeedback';
+import type {
+  FlightFeedbackEventType,
+  FlightFeedbackSnapshot,
+} from './simulation/FlightFeedback';
+import { LivingPaperFeedbackRenderer } from './LivingPaperFeedbackRenderer';
 
 interface DebugSnapshot extends GameSnapshot {
   player: { x: number; y: number; velocityX: number; velocityY: number; lift: number };
@@ -101,6 +110,8 @@ interface DebugSnapshot extends GameSnapshot {
   resources: ReturnType<CorridorWorld['getResourceDiagnostics']>;
   cleanLine: CleanLineState;
   flightBook: FlightBookState;
+  flightFeedback: FlightFeedbackSnapshot;
+  flightFeedbackResources: ReturnType<LivingPaperFeedbackRenderer['getResourceDiagnostics']>;
 }
 
 interface GliderRig {
@@ -122,6 +133,12 @@ declare global {
       setVisibilityForTest: (hidden: boolean) => void;
       prepareVisualForTest: () => void;
       prepareCleanLineVisualForTest: () => void;
+      prepareFlightFeedbackVisualForTest: (
+        type: FlightFeedbackEventType,
+        speedMultiplier?: number,
+        wingFold?: number,
+      ) => void;
+      advanceFlightFeedbackForTest: (deltaSeconds: number) => void;
       normalizeVisualForTest: () => void;
       setFlightStateForTest: (x: number, y: number) => void;
       setColliderDebugVisible: (visible: boolean) => void;
@@ -159,6 +176,9 @@ export class PaperGliderGame {
   private readonly dustPositions: Float32Array;
   private readonly scratch = new Vector3();
   private readonly nextRingScratch = new Vector3();
+  private readonly flightFeedback = new FlightFeedbackSimulation();
+  private readonly flightFeedbackRenderer: LivingPaperFeedbackRenderer;
+  private readonly reducedMotion: boolean;
   private elapsed = 0;
   private crashElapsed = 0;
   private overlayShown = false;
@@ -226,6 +246,7 @@ export class PaperGliderGame {
     );
     this.runSeed = resolvedSeed.seed;
     this.seedSource = resolvedSeed.source;
+    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const canvas = this.query<HTMLCanvasElement>('.game-canvas');
     this.renderer = new WebGLRenderer({
@@ -285,6 +306,7 @@ export class PaperGliderGame {
     this.foldMaterial = gliderRig.foldMaterial;
     this.applyFlightBookStyle();
     this.scene.add(this.glider);
+    this.flightFeedbackRenderer = new LivingPaperFeedbackRenderer(this.scene);
     this.world = new CorridorWorld(
       this.scene,
       paperTexture,
@@ -339,6 +361,11 @@ export class PaperGliderGame {
       runSequence: this.flightBookRunSequence,
     });
     this.model.start();
+    this.flightFeedback.beginRun(
+      this.runSeed,
+      this.flightBookRunSequence,
+      this.reducedMotion,
+    );
     this.bestAtLaunch = this.model.getSnapshot().best;
     this.world.reset(this.runSeed, 9.5);
     this.input.reset();
@@ -394,6 +421,20 @@ export class PaperGliderGame {
       this.glider.rotation.z = Math.sin(this.elapsed * 0.75) * 0.025;
     }
 
+    if (snapshot.mode === 'playing') {
+      this.flightFeedback.advance(deltaSeconds, {
+        x: this.glider.position.x,
+        y: this.glider.position.y,
+        z: this.glider.position.z,
+        speed: snapshot.speed,
+        speedMultiplier: snapshot.speedMultiplier,
+        wingFold: snapshot.wingFold,
+      });
+    }
+    this.flightFeedbackRenderer.update(
+      this.flightFeedback,
+      this.flightBookState.persistent.selectedStyleId,
+    );
     this.updateDust(deltaSeconds, snapshot.mode === 'playing' ? snapshot.speed : 1.3);
     this.updateUi(snapshot);
     this.updateCleanLineUi();
@@ -458,6 +499,9 @@ export class PaperGliderGame {
   private checkRingCollection(): void {
     for (const ring of this.world.getRings()) {
       if (!ringIntersects(this.glider.position, ring, this.scratch)) continue;
+      const effectX = this.scratch.x;
+      const effectY = this.scratch.y;
+      const effectZ = this.scratch.z;
       const room = this.world.getRingRoom(ring);
       this.world.collect(ring);
       if (ring.plan.encounterPhase === 'commit' && ring.plan.encounterCommitSequence !== null) {
@@ -478,6 +522,15 @@ export class PaperGliderGame {
           roomSequence: ring.plan.sequence,
           ringId,
         });
+        this.flightFeedback.emit({
+          type: 'ring-captured',
+          seed: this.runSeed,
+          runSequence: this.flightBookRunSequence,
+          entityId: `${ring.plan.sequence}:${ringId}`,
+          x: effectX,
+          y: effectY,
+          z: effectZ,
+        });
         if (challengeBonus > 0) {
           this.dispatchFlightBookEvent({
             type: 'line-bonus-awarded',
@@ -485,6 +538,15 @@ export class PaperGliderGame {
             runSequence: this.flightBookRunSequence,
             roomSequence: ring.plan.sequence,
             ringId,
+          });
+          this.flightFeedback.emit({
+            type: 'line-bonus',
+            seed: this.runSeed,
+            runSequence: this.flightBookRunSequence,
+            entityId: `${ring.plan.sequence}:${ringId}`,
+            x: effectX,
+            y: effectY,
+            z: effectZ,
           });
         }
         if (room && room.familyId !== 'classic-room' && ring.plan.index === 0) {
@@ -527,6 +589,8 @@ export class PaperGliderGame {
 
   private crash(message: string): void {
     if (!this.model.crash()) return;
+    this.flightFeedback.stop();
+    this.flightFeedbackRenderer.hide();
     this.dispatchFlightBookEvent({
       type: 'crashed',
       seed: this.runSeed,
@@ -587,6 +651,15 @@ export class PaperGliderGame {
           runSequence: this.flightBookRunSequence,
           commitSequence: this.observedEncounter.commitSequence,
         });
+        this.flightFeedback.emit({
+          type: 'clean-line',
+          seed: this.runSeed,
+          runSequence: this.flightBookRunSequence,
+          entityId: String(this.observedEncounter.commitSequence),
+          x: this.glider.position.x,
+          y: this.glider.position.y,
+          z: this.glider.position.z - 0.45,
+        });
       }
     }
     if (current.phase !== 'none' && current.commitSequence !== null) {
@@ -618,6 +691,15 @@ export class PaperGliderGame {
         runSequence: this.flightBookRunSequence,
         familyId: this.observedProceduralRoom.familyId,
         roomSequence: this.observedProceduralRoom.sequence,
+      });
+      this.flightFeedback.emit({
+        type: 'family-passed',
+        seed: this.runSeed,
+        runSequence: this.flightBookRunSequence,
+        entityId: `${this.observedProceduralRoom.familyId}:${this.observedProceduralRoom.sequence}`,
+        x: this.glider.position.x,
+        y: this.glider.position.y,
+        z: this.glider.position.z - 0.65,
       });
     }
     if (
@@ -669,6 +751,7 @@ export class PaperGliderGame {
     this.paperMaterial.color.setHex(style.paperColor);
     this.foldMaterial.color.setHex(style.foldColor);
     this.root.dataset.flightBookStyle = style.id;
+    this.flightFeedbackRenderer?.update(this.flightFeedback, style.id);
   }
 
   private updateFlightBookUi(): void {
@@ -891,10 +974,14 @@ export class PaperGliderGame {
     this.contextLost = true;
     this.input.setEnabled(false);
     this.clock.pause();
+    this.flightFeedback.clearEffects();
+    this.flightFeedbackRenderer.hide();
   };
 
   private readonly onContextRestored = (): void => {
     this.contextLost = false;
+    this.flightFeedback.clearEffects();
+    this.flightFeedbackRenderer.hide();
     if (!this.visibilityPaused) this.clock.resume();
     this.input.setEnabled(!this.visibilityPaused && this.model.getSnapshot().mode === 'playing');
   };
@@ -946,6 +1033,10 @@ export class PaperGliderGame {
     this.camera.fov = this.baseCameraFov;
     this.camera.updateProjectionMatrix();
     this.camera.lookAt(0, 2.35, -11);
+    this.flightFeedbackRenderer.update(
+      this.flightFeedback,
+      this.flightBookState.persistent.selectedStyleId,
+    );
   }
 
   private installDebugApi(): void {
@@ -992,6 +1083,8 @@ export class PaperGliderGame {
           resources: this.world.getResourceDiagnostics(),
           cleanLine: this.cleanLineState,
           flightBook: this.flightBookState,
+          flightFeedback: this.flightFeedback.getSnapshot(),
+          flightFeedbackResources: this.flightFeedbackRenderer.getResourceDiagnostics(),
         };
       },
       aimAtNextRing: () => {
@@ -1045,6 +1138,72 @@ export class PaperGliderGame {
         this.updateCleanLineUi();
         this.applyVisibilityState(true);
         this.normalizeVisualForTest();
+      },
+      prepareFlightFeedbackVisualForTest: (type, speedMultiplier = 1, wingFold = 0) => {
+        if (this.model.getSnapshot().mode !== 'playing') this.startRun();
+        let visualWingFold = this.model.getSnapshot().wingFold;
+        while (visualWingFold + 0.001 < wingFold) {
+          this.model.update(Math.min(0.1, (wingFold - visualWingFold) / flightTuning.wing.foldPerSecond), true);
+          visualWingFold = this.model.getSnapshot().wingFold;
+        }
+        this.model.update(0, false);
+        const visualSnapshot = this.model.getSnapshot();
+        if (Math.abs(visualSnapshot.speedMultiplier - speedMultiplier) > 0.015) {
+          throw new Error(
+            `Visual speed ${speedMultiplier.toFixed(2)}x does not match wing state `
+            + `${visualSnapshot.speedMultiplier.toFixed(2)}x.`,
+          );
+        }
+        this.updateWingVisual(visualSnapshot);
+        this.updateUi(visualSnapshot);
+        this.flightFeedback.clearEffects();
+        for (let frame = 0; frame < 2; frame += 1) {
+          this.flightFeedback.advance(0.1, {
+            x: this.glider.position.x,
+            y: this.glider.position.y,
+            z: this.glider.position.z,
+            speed: visualSnapshot.speed,
+            speedMultiplier: visualSnapshot.speedMultiplier,
+            wingFold,
+          });
+        }
+        this.flightFeedback.emit(createFlightFeedbackEvent({
+          type,
+          seed: this.runSeed,
+          runSequence: this.flightBookRunSequence,
+          entityId: `visual-${type}-${this.flightBookRunSequence}`,
+          x: this.glider.position.x,
+          y: this.glider.position.y,
+          z: this.glider.position.z - 0.55,
+        }));
+        this.flightFeedback.advance(0.045, {
+          x: this.glider.position.x,
+          y: this.glider.position.y,
+          z: this.glider.position.z,
+          speed: visualSnapshot.speed,
+          speedMultiplier: visualSnapshot.speedMultiplier,
+          wingFold,
+        });
+        this.flightFeedbackRenderer.update(
+          this.flightFeedback,
+          this.flightBookState.persistent.selectedStyleId,
+        );
+        this.applyVisibilityState(true);
+      },
+      advanceFlightFeedbackForTest: (deltaSeconds) => {
+        const snapshot = this.model.getSnapshot();
+        this.flightFeedback.advance(deltaSeconds, {
+          x: this.glider.position.x,
+          y: this.glider.position.y,
+          z: this.glider.position.z,
+          speed: snapshot.speed,
+          speedMultiplier: snapshot.speedMultiplier,
+          wingFold: snapshot.wingFold,
+        });
+        this.flightFeedbackRenderer.update(
+          this.flightFeedback,
+          this.flightBookState.persistent.selectedStyleId,
+        );
       },
       normalizeVisualForTest: () => this.normalizeVisualForTest(),
       setFlightStateForTest: (x, y) => {

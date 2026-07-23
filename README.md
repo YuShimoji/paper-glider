@@ -41,6 +41,14 @@ Each goal unlocks one visual-only paper fold: Amber Kraft, Blueprint Fold, or Sa
 
 Completed goals, unlocked folds, and the selected fold are stored locally under the versioned key `paperGlider.flightBook.v1`. There is no account, daily clock, backend, network save, event-log persistence, currency, or shop. A corrupt or unsupported save safely returns to the default Ivory fold without touching the existing Best or run-seed keys.
 
+## Living Paper flight feedback
+
+Flight now leaves a short, paper-fold wake whose spacing and shape reflect the current speed and wing tuck. Ring captures add a small paper-shard flourish, qualifying Line bonuses strengthen that pulse, safely exiting a procedural room leaves brief passage marks, and CLEAN LINE pulls the same accent language inward around the glider. These effects are momentary flight feedback only: they do not change flight physics, ring paths, collision, scoring, Flight Book progress, or saved data.
+
+The feedback plan is independent of Three.js and consumes only the run seed, run sequence, versioned event identity, explicit simulation delta, and sampled flight state. It does not read a wall clock, implicit randomness, network state, user agent, or render timing. Duplicate event IDs are idempotent; hidden pages do not advance effect age or wake distance; restart, crash, context loss, and fallback startup clear the fixed pools.
+
+Rendering uses two effect-only `InstancedMesh` draws with fixed capacities of 24 wake segments and 24 event shards. Geometry and materials are created once and reused across styles, rooms, restarts, and long campaigns. Ivory, Amber Kraft, Blueprint Fold, and Sage Ledger change only the feedback palette. `prefers-reduced-motion` retains recognizable capture/passage cues with fewer shards, shorter motion, and wider wake spacing.
+
 ## Quality checks
 
 ```bash
@@ -51,7 +59,7 @@ npm run test:e2e
 npm run test:visual
 ```
 
-Vitest covers seed replay, explicit-delta flight, lifecycle timing, rewards, schema/hash/loader failures, Flight Line state, Archive Gate AABBs/recycling, both procedural families, multi-seed reachability, Flight Book replay/deduplication/run boundaries, persistence failures, all goals, all styles, and the 48-seed × 5-speed × 72-room campaign. Playwright covers the gameplay verbs, visibility pause/resume, high-speed flight, fixed room order, family safe lanes/collision, Approach/Commit/Recovery/CLEAN LINE, real-runtime Flight Book unlocks, save recovery/style persistence, Gate collision/recycling/fallback, and fixed `1280x720` / `390x844` screenshots. GitHub Actions runs the same validation suite and does not own Pages deployment.
+Vitest covers seed replay, explicit-delta flight, lifecycle timing, rewards, schema/hash/loader failures, Flight Line state, Archive Gate AABBs/recycling, both procedural families, multi-seed reachability, Flight Book replay/deduplication/run boundaries, persistence failures, all goals/styles, deterministic feedback events, fixed GPU-resource identity, and the 48-seed × 5-speed × 72-room campaigns. Playwright covers the gameplay verbs, visibility pause/resume, high-speed flight, fixed room order, family safe lanes/collision, Approach/Commit/Recovery/CLEAN LINE, real-runtime Flight Book unlocks, feedback palette/lifecycle/context loss, save recovery/style persistence, Gate collision/recycling/fallback, and fixed `1280x720` / `390x844` screenshots. GitHub Actions runs the same validation suite and does not own Pages deployment.
 
 The best score, most recent run seed, and versioned Flight Book collection are stored in the browser with `localStorage`. Procedural rooms, furniture layouts, paper texture, curtains, pages, and dust are created at runtime; the approved Archive Gate GLB/manifest is versioned inside this repository and requires no external CDN or API.
 
