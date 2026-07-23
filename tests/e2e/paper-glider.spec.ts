@@ -290,6 +290,9 @@ async function prepareArchiveGateVisual(
     if (ring) debug.setFlightStateForTest(ring.x, ring.y);
     debug.setColliderDebugVisible(Boolean(colliders));
     debug.setVisibilityForTest(true);
+    // Re-normalize after room placement so a slow first attempt cannot retain a
+    // pooled ring/dust frame that differs from the retry.
+    debug.normalizeVisualForTest();
   }, options);
   if (!showFlightBook) await hideFlightBookHudForLegacyVisual(page);
   await page.waitForTimeout(120);
