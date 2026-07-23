@@ -509,6 +509,32 @@ async function pointerUp(page: import('@playwright/test').Page, pointerId: numbe
   }, pointerId);
 }
 
+async function doublePointerPress(page: import('@playwright/test').Page): Promise<void> {
+  await page.locator('.game-canvas').evaluate((element) => {
+    const canvas = element as HTMLCanvasElement;
+    const bounds = canvas.getBoundingClientRect();
+    const init = {
+      pointerType: 'mouse',
+      button: 0,
+      clientX: bounds.left + bounds.width / 2,
+      clientY: bounds.top + bounds.height / 2,
+      bubbles: true,
+    };
+    for (const pointerId of [42, 43]) {
+      canvas.dispatchEvent(new PointerEvent('pointerdown', {
+        ...init,
+        pointerId,
+        buttons: 1,
+      }));
+      window.dispatchEvent(new PointerEvent('pointerup', {
+        ...init,
+        pointerId,
+        buttons: 0,
+      }));
+    }
+  });
+}
+
 async function setDocumentHidden(page: import('@playwright/test').Page, hidden: boolean): Promise<void> {
   await page.evaluate((nextHidden) => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: nextHidden });
@@ -589,13 +615,10 @@ test('starts, tucks, double-opens, collects a ring, crashes, and restarts', asyn
   const tucked = (await snapshot(page)).wingFold;
   await pointerUp(page, 41);
   await page.waitForTimeout(460);
-  const canvas = page.locator('.game-canvas');
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error('Game canvas has no bounds.');
-  await canvas.dblclick({
-    force: true,
-    position: { x: box.width / 2, y: box.height / 2 },
-  });
+  // Dispatch the two production pointer presses in one browser task. Playwright's
+  // high-level dblclick can exceed the 420 ms gesture window when software WebGL
+  // stalls a mobile CI worker, despite emitting the same eventual event sequence.
+  await doublePointerPress(page);
   await expect.poll(async () => (await snapshot(page)).wingFold).toBeLessThan(tucked);
 
   await page.evaluate(() => window.__paperGliderDebug?.aimAtWall());
