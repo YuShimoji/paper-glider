@@ -295,7 +295,10 @@ async function prepareArchiveGateVisual(
     debug.normalizeVisualForTest();
   }, options);
   if (!showFlightBook) await hideFlightBookHudForLegacyVisual(page);
-  await page.waitForTimeout(120);
+  await pinControlsHintForVisual(page);
+  // Wait for the paused game loop to render the final room placement. A fixed
+  // wall-clock delay can capture the preceding WebGL back buffer on a slow runner.
+  await waitForRenderedFrame(page);
 }
 
 async function enterFlightLinePhase(
@@ -551,6 +554,12 @@ async function captureVisual(
     threshold: 0.22,
     maxDiffPixelRatio: 0.012,
   });
+}
+
+async function waitForRenderedFrame(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
 }
 
 async function pinControlsHintForVisual(page: import('@playwright/test').Page): Promise<void> {
