@@ -22,7 +22,7 @@ The automated and public PG-S1 gates are closed. PG-V1 is locally technical-gree
 
 Session entry on 2026-07-23 replaced the stale attached PG-S1 start point with the live repository boundary. After `git fetch --prune origin`, `main` was clean at `6e0469c20fddeb292521687ac4a1c20adbf2c042`, `HEAD...origin/main=0/0`. Exact-head CI `29967631756` and legacy Pages `29967631018` were successful, the Pages API still reported `status=built`, `build_type=legacy`, `source=main:/docs`, and the public `?seed=1BADB000` document returned HTTP 200. No PG-S1 work was replayed or reverted.
 
-Focused branch: `codex/living-paper-flight-feedback-v1`. PG-V1 implementation commit: `3c8bbc4` (`feat: add deterministic living paper flight feedback`). At this checkpoint the generated `docs/`, README, and this handoff are the only remaining candidate-documentation changes; focused push, guarded main integration, real CI/Pages, and public readback are still pending and therefore must not be reported as passed.
+Focused branch: `codex/living-paper-flight-feedback-v1`. PG-V1 implementation commit: `3c8bbc4` (`feat: add deterministic living paper flight feedback`). Candidate publication/build documentation commit: `a50b075` (`docs: prepare PG-V1 publication candidate`). Exact focused candidate `a50b0751af762f31a9c334179dff1aebaa82e787` is locally accepted and clean. Focused push, guarded main integration, real CI/Pages, and public readback are still pending and therefore must not be reported as passed.
 
 ### Effect and resource contract
 
@@ -36,15 +36,17 @@ Focused branch: `codex/living-paper-flight-feedback-v1`. PG-V1 implementation co
 
 ### Local acceptance evidence
 
+- Exact candidate `npm ci`: 165 packages installed; audit 0.
 - `npm ls --depth=0`: pass with Three `0.180.0`, Playwright `1.61.1`, Vitest `4.1.10`, Vite `7.3.6`, TypeScript `5.9.3`.
 - `npm audit --audit-level=high`: 0 vulnerabilities.
 - Typecheck and lint: pass; lint warnings 0.
 - Unit: 11 files / 62 tests passed. The new 48 seeds × 5 speed bands × 72 rooms campaign proves finite values, fixed pool bounds, bounded dedupe history, and deterministic replay.
 - Full Playwright: 82 enumerated; 68 passed, 14 intentional project-scoped mobile skips, 0 failed. This includes the complete existing PG-1/PG-A2/PG-A3/PG-S1 gameplay and visual suite.
+- Focused visual command: 48 enumerated; 41 passed, 7 intentional project-scoped mobile skips, 0 failed.
 - Ten new named PG-V1 baselines cover five states at both 1280×720 and 390×844: Ivory open-wing ring capture, Amber tucked high-speed Line pulse, Blueprint CLEAN LINE with Archive Gate, Sage family passage, and result-overlay reset. All were visually inspected.
 - The first result-reset comparison exposed only a moving crash-coast background. Actual/expected/diff were inspected; the fixture now pauses, fixes room positions, and normalizes camera/animation before capture. A baseline-generation run, a normal focused repeat, and the full suite all passed afterward.
 - Build: 26 modules; generated output is `docs/` with CSS 17.84 kB, app 80.49 kB, Workbench loader 9.52 kB, GLTFLoader 44.82 kB, Three core 532.08 kB.
-- Production preview at `http://127.0.0.1:4173/paper-glider/?seed=1BADB000`: desktop 1280×720 and mobile 390×844 returned HTTP 200, entered playing state, exposed no production debug API, and produced zero console/page errors. The owned preview listener was stopped after verification.
+- Production preview at `http://127.0.0.1:4173/paper-glider/?seed=1BADB000`: desktop 1280×720 and mobile 390×844 returned HTTP 200, manifest and GLB both returned 200, entered playing state, exposed no production debug API, and produced zero console/page errors. The owned preview listener was stopped after verification.
 - Not automated or claimed: physical iOS/Android touch feel, constrained-device frame-time/thermal/memory behavior, Firefox/WebKit, and human 15–30 minute readability/fun/fatigue.
 
 ## 2026-07-23 development-readiness refresh
