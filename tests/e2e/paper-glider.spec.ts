@@ -183,8 +183,25 @@ async function startFlight(page: import('@playwright/test').Page): Promise<void>
   await expect.poll(async () => (await snapshot(page)).mode).toBe('playing');
 }
 
+async function gotoGamePage(
+  page: import('@playwright/test').Page,
+  url: string,
+): Promise<void> {
+  try {
+    await page.goto(url);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes('net::ERR_NO_BUFFER_SPACE')) {
+      throw error;
+    }
+    // A Windows hosted runner can transiently exhaust a local socket buffer while
+    // recycling many isolated Chromium pages. Retry this exact infrastructure error once.
+    await page.waitForTimeout(250);
+    await page.goto(url);
+  }
+}
+
 async function gotoFlightLine(page: import('@playwright/test').Page): Promise<void> {
-  await page.goto(`?seed=${FLIGHT_LINE_SEED}`);
+  await gotoGamePage(page, `?seed=${FLIGHT_LINE_SEED}`);
   await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
   try {
     await expect.poll(
@@ -203,7 +220,7 @@ async function gotoFlightLine(page: import('@playwright/test').Page): Promise<vo
 }
 
 async function gotoRoomSet(page: import('@playwright/test').Page): Promise<void> {
-  await page.goto(`?seed=${ROOM_SET_SEED}`);
+  await gotoGamePage(page, `?seed=${ROOM_SET_SEED}`);
   await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
   await expect.poll(async () => (await snapshot(page)).asset.status).toBe('loaded');
 }
@@ -588,7 +605,7 @@ async function hasLiveWebGlContext(page: import('@playwright/test').Page): Promi
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('?seed=1BADB002');
+  await gotoGamePage(page, '?seed=1BADB002');
   const startOverlay = page.locator('.start-overlay');
   try {
     await expect(startOverlay).toBeVisible({ timeout: 8_000 });
@@ -1152,7 +1169,7 @@ test('times out asset preload and starts the procedural fallback', async ({ page
       // The AbortController intentionally cancels this delayed request at five seconds.
     }
   });
-  await page.goto(`?seed=${FLIGHT_LINE_SEED}`);
+  await gotoGamePage(page, `?seed=${FLIGHT_LINE_SEED}`);
   await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
   const fallback = await snapshot(page);
   expect(fallback.asset).toEqual({
@@ -1575,7 +1592,7 @@ test('@visual procedural fallback remains playable', async ({ page }, testInfo) 
     contentType: 'application/json',
     body: '{}',
   }));
-  await page.goto('?seed=1BADB00F');
+  await gotoGamePage(page, '?seed=1BADB00F');
   await expect(page.locator('.start-overlay')).toBeVisible({ timeout: 8_000 });
   await expect.poll(async () => (await snapshot(page)).asset.status).toBe('procedural-fallback');
   await page.evaluate(() => {
