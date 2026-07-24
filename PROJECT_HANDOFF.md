@@ -2,13 +2,37 @@
 
 This is the durable restart and supervising-AI entrypoint. Read it with `README.md`, then verify live Git, GitHub Actions, Pages, and public-game state before changing gameplay.
 
+## 2026-07-24 cross-device re-entry snapshot
+
+- Canonical lane: `main` at `172f59304415e8011b8696037f764e7e30fba75f`; after `git fetch --prune origin`, `HEAD...origin/main=0/0` and the tracked worktree is clean. The parent `C:\Users\thank\AGENTS.md` is the nearest instruction file; this `PROJECT_HANDOFF.md` is the only repository-local restart authority. `docs/ai/`, `docs/project-context.md`, `docs/decision-log.md`, and `docs/idea-ledger.md` are not present in this checkout.
+- The current post-PG-V1 main delta is docs/test-only: `a5f1ce9` published the PG-V1 handoff, `5edaa06` advanced the roadmap, `9dac9d9` made Archive Gate visual capture wait for the rendered frame, and `172f593` retries only the exact transient Windows `net::ERR_NO_BUFFER_SPACE` navigation error once. Gameplay, scoring, physics, room plans, generated `docs/`, and public asset semantics were not changed by these four commits.
+- Exact-main GitHub CI `30032096876` succeeded for `172f593`: dependency tree, typecheck, lint, unit tests, production build, and browser/visual regression all passed; the browser run enumerated 82 tests with 68 passed, 14 intentional project-scoped mobile skips, and 0 failed. Exact legacy Pages build/deployment `30032094497` also succeeded.
+- Live Pages API readback is `status=built`, `build_type=legacy`, source `main:/docs`; the public document `https://yushimoji.github.io/paper-glider/?seed=1BADB000` returned HTTP 200 in this re-entry check. The full functional desktop/mobile fixed-seed readback remains the prior evidence recorded below; it was not rerun during this docs-only sync.
+- Git does not carry checkout-local dependencies or evidence: `.playwright-mcp/`, `.serena/`, `node_modules/`, `output/`, `test-results/`, and `tsconfig.tsbuildinfo` are ignored here. A new terminal must run `npm ci`; it must not interpret missing ignored folders as missing product artifacts.
+
+### First re-entry commands
+
+```powershell
+Set-Location 'C:\Users\thank\Storage\Game Projects\paper-glider'
+git fetch --prune origin
+git status --short --branch
+git rev-list --left-right --count 'HEAD...origin/main'
+Get-Content .\PROJECT_HANDOFF.md -TotalCount 80
+npm ci
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run test:e2e
+```
+
 ## Current conclusion
 
 **PUBLISHED_WITH_LIVING_PAPER_FLIGHT_FEEDBACK_V1**
 
-PG-V1 Living Paper Flight Feedback v1 is implemented, tested, integrated, and published from legacy GitHub Pages `main:/docs`. Focused implementation `3c8bbc47a239618dd564792b955ef7da202ed211` and generated-doc candidate `a50b0751af762f31a9c334179dff1aebaa82e787` were integrated without rewriting history at `073b61681322dc4f1de94ca99a35319a28460849`. Two evidence-led, test-only stabilization commits followed: `3ba6ddc2a6602f5a8b4cc90b50e0e58fb1753c83` fixes pooled Archive Gate visual normalization, and `98f7017d29e023ee57d27c1a40c18a3513a205e7` keeps the production double-press event sequence inside its 420 ms contract on slow mobile software-WebGL CI.
+PG-V1 Living Paper Flight Feedback v1 is implemented, tested, integrated, and published from legacy GitHub Pages `main:/docs`. Focused implementation `3c8bbc47a239618dd564792b955ef7da202ed211` and generated-doc candidate `a50b0751af762f31a9c334179dff1aebaa82e787` were integrated without rewriting history at `073b61681322dc4f1de94ca99a35319a28460849`. Evidence-led, test-only stabilization commits `3ba6ddc`, `98f7017`, `9dac9d9`, and `172f593` preserve the production contract while addressing pooled visual normalization, slow mobile double-open timing, deterministic Archive Gate frame capture, and one exact transient Windows socket-buffer navigation error.
 
-Exact-main CI `30027519454` passed at `98f7017`: dependency tree, typecheck, lint, 11 files / 62 unit tests, 26-module production build, 82 Playwright tests enumerated, 68 passed, 14 intentional project-scoped mobile skips, 0 flaky, 0 failed, with report upload. Exact legacy Pages `30027518757` succeeded. The Pages API remained `status=built`, `build_type=legacy`, `source=main:/docs`; no Actions Pages deployment, PR, tag, release, force-push, external API, telemetry, login, or new external asset was introduced.
+Exact-main CI `30032096876` passed at `172f593`: dependency tree, typecheck, lint, 11 files / 62 unit tests, 26-module production build, 82 Playwright tests enumerated, 68 passed, 14 intentional project-scoped mobile skips, 0 failed, with report upload. Exact legacy Pages `30032094497` succeeded. The Pages API remained `status=built`, `build_type=legacy`, `source=main:/docs`; no Actions Pages deployment, PR, tag, release, force-push, external API, telemetry, login, or new external asset was introduced.
 
 The public fixed-seed readback at `https://yushimoji.github.io/paper-glider/?seed=1BADB000` passed without a production debug API. At 1280×720, real pointer input collected nine consecutive planned rings, Amber Kraft persisted, the Archive Gate and living-paper capture feedback remained visible together, a settled hidden interval kept both score and full-frame SHA-256 unchanged for 1.2 seconds, resume did not collect or jump during the first 600 ms, deliberate collision reached game over, and restart reset Rings to `00`. At 390×844, a touch-equivalent tap collected the first planned ring, Blueprint Fold persisted, WebGL remained live, and `scrollWidth=clientWidth=390`, `scrollHeight=clientHeight=844`. Document, manifest, and GLB returned HTTP 200; functional desktop/mobile runs produced zero console/page errors. Inspected screenshots are outside the repository at `C:\Users\thank\AppData\Local\Temp\paper-glider-pgv1-public-readback-20260724-01`.
 
@@ -20,9 +44,9 @@ The automated and public PG-V1 Chromium gates are closed. Physical-phone touch, 
 
 ## PG-V1 local technical checkpoint
 
-Session entry on 2026-07-23 replaced the stale attached PG-S1 start point with the live repository boundary. After `git fetch --prune origin`, `main` was clean at `6e0469c20fddeb292521687ac4a1c20adbf2c042`, `HEAD...origin/main=0/0`. Exact-head CI `29967631756` and legacy Pages `29967631018` were successful, the Pages API still reported `status=built`, `build_type=legacy`, `source=main:/docs`, and the public `?seed=1BADB000` document returned HTTP 200. No PG-S1 work was replayed or reverted.
+Session entry on 2026-07-24 confirmed the live repository boundary after `git fetch --prune origin`: `main` is `172f59304415e8011b8696037f764e7e30fba75f`, `HEAD...origin/main=0/0`, and the tracked worktree is clean. Exact-head CI `30032096876` and legacy Pages `30032094497` succeeded; the Pages API reports `status=built`, `build_type=legacy`, `source=main:/docs`, and the public `?seed=1BADB000` document returned HTTP 200. No PG-S1 work was replayed or reverted.
 
-Focused branch `codex/living-paper-flight-feedback-v1` was pushed clean with parity `0/0`. Commit map: `3c8bbc4` implementation/tests/baselines; `a50b075` generated `docs/` and candidate documentation; `315eb61` exact focused-candidate validation record; `073b616` guarded non-rewriting main integration; `3ba6ddc` Archive Gate visual fixture stabilization; `98f7017` mobile double-open fixture stabilization. Both stabilizations are test-only and do not change production/generated bytes. Main was guarded against the unchanged `origin/main` before each push; no PR was required or created.
+Focused branch `codex/living-paper-flight-feedback-v1` was pushed clean with parity `0/0`. Commit map: `3c8bbc4` implementation/tests/baselines; `a50b075` generated `docs/` and candidate documentation; `315eb61` exact focused-candidate validation record; `073b616` guarded non-rewriting main integration; `3ba6ddc` Archive Gate visual fixture stabilization; `98f7017` mobile double-open fixture stabilization; `9dac9d9` deterministic Archive Gate render wait; `172f593` exact transient navigation retry. The four post-publication commits are docs/test-only and do not change production/generated bytes. Main was guarded against the unchanged `origin/main` before each push; no PR was required or created.
 
 ### Effect and resource contract
 
